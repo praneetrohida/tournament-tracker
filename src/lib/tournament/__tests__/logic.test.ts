@@ -82,20 +82,6 @@ describe('Tournament Logic', () => {
       expect(matches[1].round).toBe(1);
     });
     
-    test('should generate classic tournament matches', () => {
-      const teams: Team[] = [
-        { id: 't1', players: [{ id: 'p1', name: 'Player 1' }] },
-        { id: 't2', players: [{ id: 'p2', name: 'Player 2' }] },
-        { id: 't3', players: [{ id: 'p3', name: 'Player 3' }] },
-        { id: 't4', players: [{ id: 'p4', name: 'Player 4' }] }
-      ];
-      
-      const matches = generateMatches(teams, 'classic');
-      
-      expect(matches.length).toBe(6); // n(n-1)/2 = 4*3/2 = 6 matches for 4 teams
-      expect(matches[0].round).toBe(1);
-    });
-    
     test('should handle byes in knockout with non-power-of-2 team count', () => {
       const teams: Team[] = [
         { id: 't1', players: [{ id: 'p1', name: 'Player 1' }] },
@@ -224,6 +210,59 @@ describe('Tournament Logic', () => {
       expect(updatedMatches[2].round).toBe(2);
       expect(updatedMatches[2].team1).toBe(teams[0]); // First winner
       expect(updatedMatches[2].team2).toBe(teams[2]); // Second winner
+    });
+  });
+
+  // Tests for double-elimination tournament
+  describe('Double Elimination Tournament', () => {
+    test('should generate initial matches for double-elimination tournament', () => {
+      const teams: Team[] = [
+        { id: 't1', players: [{ id: 'p1', name: 'Player 1' }] },
+        { id: 't2', players: [{ id: 'p2', name: 'Player 2' }] },
+        { id: 't3', players: [{ id: 'p3', name: 'Player 3' }] },
+        { id: 't4', players: [{ id: 'p4', name: 'Player 4' }] }
+      ];
+      
+      const matches = generateMatches(teams, 'double-elimination');
+      
+      // Should generate the same number of matches as a regular knockout for the first round
+      expect(matches.length).toBe(2);
+      // All matches should be in the winners bracket
+      expect(matches.every(m => m.bracket === 'winners')).toBe(true);
+      // All matches should be in round 1
+      expect(matches.every(m => m.round === 1)).toBe(true);
+    });
+    
+    test('should identify when a double-elimination tournament is not complete', () => {
+      const teams: Team[] = [
+        { id: 't1', players: [{ id: 'p1', name: 'Player 1' }] },
+        { id: 't2', players: [{ id: 'p2', name: 'Player 2' }] }
+      ];
+      
+      const matches = generateMatches(teams, 'double-elimination');
+      expect(isTournamentComplete(matches, 1, 'double-elimination')).toBe(false);
+    });
+    
+    test('should identify a double-elimination champion when tournament is complete', () => {
+      const teams: Team[] = [
+        { id: 't1', players: [{ id: 'p1', name: 'Player 1' }] },
+        { id: 't2', players: [{ id: 'p2', name: 'Player 2' }] }
+      ];
+      
+      // Create a simple final match to test champion identification
+      const finalMatch: Match = {
+        id: 'final-match',
+        team1: teams[0],
+        team2: teams[1],
+        round: 2,
+        bracket: 'final',
+        winner: teams[0]
+      };
+      
+      const matches = [finalMatch];
+      
+      expect(isTournamentComplete(matches, 2, 'double-elimination')).toBe(true);
+      expect(getTournamentChampion(matches, 2, 'double-elimination')?.id).toBe(teams[0].id);
     });
   });
 }); 

@@ -17,14 +17,15 @@ export type Match = {
   team2: Team;
   winner?: Team;
   round: number;
+  bracket?: 'winners' | 'losers' | 'final';
 };
 
-export type TournamentType = 'classic' | 'knockout';
+export type TournamentType = 'knockout' | 'double-elimination';
 export type GameType = 'singles' | 'doubles';
 
 export const playersAtom = atomWithStorage<Player[]>('players', []);
 export const gameTypeAtom = atomWithStorage<GameType>('gameType', 'singles');
-export const tournamentTypeAtom = atomWithStorage<TournamentType>('tournamentType', 'classic');
+export const tournamentTypeAtom = atomWithStorage<TournamentType>('tournamentType', 'knockout');
 export const teamsAtom = atomWithStorage<Team[]>('teams', []);
 export const matchesAtom = atomWithStorage<Match[]>('matches', []);
 export const currentRoundAtom = atomWithStorage<number>('currentRound', 1);

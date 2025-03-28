@@ -69,8 +69,8 @@ export function TournamentSetup() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="classic">Classic (Round Robin)</SelectItem>
                 <SelectItem value="knockout">Knockout</SelectItem>
+                <SelectItem value="double-elimination">Double Elimination</SelectItem>
               </SelectContent>
             </Select>
           </div>

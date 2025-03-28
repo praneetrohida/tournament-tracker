@@ -84,34 +84,28 @@ export function TournamentView() {
     // Update the current match with the winner using the extracted logic
     const updatedMatches = updateMatchWithWinner(matches, match.id, winner);
     
-    // Check if all matches in the current round are complete and we need to advance
-    if (tournamentType === 'knockout') {
-      // Get matches for the current round with updated winners
-      const updatedCurrentRoundMatches = getMatchesForRound(updatedMatches, currentRound);
+    // Get matches for the current round with updated winners
+    const updatedCurrentRoundMatches = getMatchesForRound(updatedMatches, currentRound);
+    
+    // Check if all matches in the current round are complete
+    const roundComplete = updatedCurrentRoundMatches.every(m => m.winner);
+    
+    if (roundComplete) {
+      // Use the advanceTournament function to handle tournament advancement
+      const { matches: finalMatches, nextRound } = advanceTournament(
+        updatedMatches, 
+        currentRound, 
+        tournamentType
+      );
       
-      // Check if all matches in the current round are complete
-      const roundComplete = updatedCurrentRoundMatches.every(m => m.winner);
+      setMatches(finalMatches);
       
-      if (roundComplete) {
-        // Use the advanceTournament function to handle tournament advancement
-        const { matches: finalMatches, nextRound } = advanceTournament(
-          updatedMatches, 
-          currentRound, 
-          tournamentType
-        );
-        
-        setMatches(finalMatches);
-        
-        // Only advance the round if it actually changed
-        if (nextRound !== currentRound) {
-          setCurrentRound(nextRound);
-        }
-      } else {
-        // Just update matches if round is not complete yet
-        setMatches(updatedMatches);
+      // Only advance the round if it actually changed
+      if (nextRound !== currentRound) {
+        setCurrentRound(nextRound);
       }
     } else {
-      // For non-knockout tournaments, just update the matches
+      // Just update matches if round is not complete yet
       setMatches(updatedMatches);
     }
   };
@@ -130,30 +124,26 @@ export function TournamentView() {
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">
-          {tournamentType === 'knockout'
-            ? (currentRound === maxRound ? "Final Round" : `Round ${currentRound}`)
-            : 'Tournament Matches'}
+          {currentRound === maxRound ? "Final Round" : `Round ${currentRound}`}
         </h2>
         <div className="flex gap-2">
-          {tournamentType === 'knockout' && (
-            <Button
-              variant="outline"
-              onClick={() => setShowBracket(!showBracket)}
-              className="flex items-center gap-2"
-            >
-              {showBracket ? (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  Hide Bracket
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  View Bracket
-                </>
-              )}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            onClick={() => setShowBracket(!showBracket)}
+            className="flex items-center gap-2"
+          >
+            {showBracket ? (
+              <>
+                <ChevronUp className="h-4 w-4" />
+                Hide Bracket
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4" />
+                View Bracket
+              </>
+            )}
+          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -182,61 +172,216 @@ export function TournamentView() {
         </div>
       </div>
 
-      {tournamentType === 'knockout' && showBracket && (
+      {showBracket && (
         <Card>
           <CardHeader>
             <CardTitle>Tournament Bracket</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <div className="flex gap-4 min-w-[600px]">
-                {allRounds.map((round: number) => {
-                  // Get matches for this round and sort them (bye matches at the bottom)
-                  const roundMatches = getMatchesForRound(matches, round).sort((a, b) => {
-                    // If a is a bye match and b is not, a should come after b
-                    if (isByeMatch(a) && !isByeMatch(b)) return 1;
-                    // If a is not a bye match and b is, a should come before b
-                    if (!isByeMatch(a) && isByeMatch(b)) return -1;
-                    // Both are the same type, maintain original order
-                    return 0;
-                  });
+            {tournamentType === 'double-elimination' ? (
+              // Double elimination bracket view with winners and losers brackets
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Winners Bracket</h3>
+                  <div className="overflow-x-auto">
+                    <div className="flex gap-4 min-w-[600px]">
+                      {allRounds.map((round: number) => {
+                        // Get matches for this round in winners bracket
+                        const roundMatches = matches
+                          .filter(m => m.round === round && m.bracket === 'winners')
+                          .sort((a, b) => {
+                            if (isByeMatch(a) && !isByeMatch(b)) return 1;
+                            if (!isByeMatch(a) && isByeMatch(b)) return -1;
+                            return 0;
+                          });
 
-                  // Check if this is the final round
-                  const isFinalRound = round === maxRound;
+                        if (roundMatches.length === 0) return null;
 
-                  return (
-                    <div key={round} className="flex-1">
-                      <div className="font-medium text-center mb-2">
-                        {isFinalRound ? "Final Round" : `Round ${round}`}
-                      </div>
-                      <div className="space-y-6">
-                        {roundMatches.map((match: Match) => (
-                          <div 
-                            key={match.id} 
-                            className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
-                          >
-                            <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
-                              {getTeamDisplay(match.team1)}
+                        // Check if this is the final round
+                        const isFinalRound = round === maxRound;
+
+                        return (
+                          <div key={`winners-${round}`} className="flex-1">
+                            <div className="font-medium text-center mb-2">
+                              {isFinalRound ? "Final Round" : `Round ${round}`}
                             </div>
-                            <div className="h-px bg-border my-1"></div>
-                            {isByeMatch(match) ? (
-                              <div className="p-1 text-xs text-muted-foreground flex items-center justify-center gap-1">
-                                <FastForward className="h-3.5 w-3.5 text-primary" />
-                                <span>Automatic advance</span>
-                              </div>
-                            ) : (
-                              <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                {getTeamDisplay(match.team2)}
-                              </div>
-                            )}
+                            <div className="space-y-6">
+                              {roundMatches.map((match: Match) => (
+                                <div 
+                                  key={match.id} 
+                                  className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
+                                >
+                                  <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                    {getTeamDisplay(match.team1)}
+                                  </div>
+                                  <div className="h-px bg-border my-1"></div>
+                                  {isByeMatch(match) ? (
+                                    <div className="p-1 text-xs text-muted-foreground flex items-center justify-center gap-1">
+                                      <FastForward className="h-3.5 w-3.5 text-primary" />
+                                      <span>Automatic advance</span>
+                                    </div>
+                                  ) : (
+                                    <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                      {getTeamDisplay(match.team2)}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Losers Bracket</h3>
+                  <div className="overflow-x-auto">
+                    <div className="flex gap-4 min-w-[600px]">
+                      {allRounds.map((round: number) => {
+                        // Get matches for this round in losers bracket
+                        const roundMatches = matches
+                          .filter(m => m.round === round && m.bracket === 'losers')
+                          .sort((a, b) => {
+                            if (isByeMatch(a) && !isByeMatch(b)) return 1;
+                            if (!isByeMatch(a) && isByeMatch(b)) return -1;
+                            return 0;
+                          });
+
+                        if (roundMatches.length === 0) return null;
+
+                        return (
+                          <div key={`losers-${round}`} className="flex-1">
+                            <div className="font-medium text-center mb-2">
+                              {`Round ${round}`}
+                            </div>
+                            <div className="space-y-6">
+                              {roundMatches.map((match: Match) => (
+                                <div 
+                                  key={match.id} 
+                                  className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
+                                >
+                                  <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                    {getTeamDisplay(match.team1)}
+                                  </div>
+                                  <div className="h-px bg-border my-1"></div>
+                                  {isByeMatch(match) ? (
+                                    <div className="p-1 text-xs text-muted-foreground flex items-center justify-center gap-1">
+                                      <FastForward className="h-3.5 w-3.5 text-primary" />
+                                      <span>Automatic advance</span>
+                                    </div>
+                                  ) : (
+                                    <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                      {getTeamDisplay(match.team2)}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Finals</h3>
+                  <div className="overflow-x-auto">
+                    <div className="flex gap-4 min-w-[600px]">
+                      {allRounds.map((round: number) => {
+                        // Get matches for this round in finals
+                        const roundMatches = matches
+                          .filter(m => m.round === round && m.bracket === 'final')
+                          .sort((a, b) => {
+                            if (isByeMatch(a) && !isByeMatch(b)) return 1;
+                            if (!isByeMatch(a) && isByeMatch(b)) return -1;
+                            return 0;
+                          });
+
+                        if (roundMatches.length === 0) return null;
+
+                        return (
+                          <div key={`final-${round}`} className="flex-1">
+                            <div className="font-medium text-center mb-2">
+                              {roundMatches.length > 1 ? "Final Matches" : "Championship Match"}
+                            </div>
+                            <div className="space-y-6">
+                              {roundMatches.map((match: Match) => (
+                                <div 
+                                  key={match.id} 
+                                  className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
+                                >
+                                  <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                    {getTeamDisplay(match.team1)}
+                                  </div>
+                                  <div className="h-px bg-border my-1"></div>
+                                  <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                    {getTeamDisplay(match.team2)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              // Regular knockout bracket view
+              <div className="overflow-x-auto">
+                <div className="flex gap-4 min-w-[600px]">
+                  {allRounds.map((round: number) => {
+                    // Get matches for this round and sort them (bye matches at the bottom)
+                    const roundMatches = getMatchesForRound(matches, round).sort((a, b) => {
+                      // If a is a bye match and b is not, a should come after b
+                      if (isByeMatch(a) && !isByeMatch(b)) return 1;
+                      // If a is not a bye match and b is, a should come before b
+                      if (!isByeMatch(a) && isByeMatch(b)) return -1;
+                      // Both are the same type, maintain original order
+                      return 0;
+                    });
+
+                    // Check if this is the final round
+                    const isFinalRound = round === maxRound;
+
+                    return (
+                      <div key={round} className="flex-1">
+                        <div className="font-medium text-center mb-2">
+                          {isFinalRound ? "Final Round" : `Round ${round}`}
+                        </div>
+                        <div className="space-y-6">
+                          {roundMatches.map((match: Match) => (
+                            <div 
+                              key={match.id} 
+                              className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
+                            >
+                              <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                {getTeamDisplay(match.team1)}
+                              </div>
+                              <div className="h-px bg-border my-1"></div>
+                              {isByeMatch(match) ? (
+                                <div className="p-1 text-xs text-muted-foreground flex items-center justify-center gap-1">
+                                  <FastForward className="h-3.5 w-3.5 text-primary" />
+                                  <span>Automatic advance</span>
+                                </div>
+                              ) : (
+                                <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
+                                  {getTeamDisplay(match.team2)}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
