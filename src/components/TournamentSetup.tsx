@@ -70,7 +70,7 @@ export function TournamentSetup() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="knockout">Knockout</SelectItem>
-                <SelectItem value="double-elimination">Double Elimination</SelectItem>
+                <SelectItem disabled value="double-elimination">Double Elimination (coming soon)</SelectItem>
               </SelectContent>
             </Select>
           </div>
