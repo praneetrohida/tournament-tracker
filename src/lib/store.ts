@@ -38,6 +38,7 @@ export const isSetupCompleteAtom = atom(
     return players.length > 0 && teams.length > 0;
   },
   (get, set) => {
+    console.log(typeof get)
     // Reset tournament
     set(teamsAtom, []);
     set(matchesAtom, []);

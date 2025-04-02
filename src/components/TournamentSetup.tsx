@@ -15,11 +15,10 @@ import {
   playersAtom,
   teamsAtom,
   matchesAtom,
-  isSetupCompleteAtom,
   GameType,
   TournamentType,
 } from '@/lib/store';
-import type { Team, Match } from '@/lib/store';
+
 // Import tournament logic functions
 import { generateTeams, generateMatches } from '@/lib/tournament';
 

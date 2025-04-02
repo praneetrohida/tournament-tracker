@@ -30,7 +30,6 @@ import {
   isByeMatch,
   isTournamentComplete,
   getTournamentChampion,
-  generateNextRoundMatches,
   advanceTournament,
   getTeamDisplay,
   getMatchTitle

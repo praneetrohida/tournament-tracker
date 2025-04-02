@@ -432,7 +432,7 @@ export const advanceTournament = (
       return { matches, nextRound: currentRound };
     }
     
-    let nextRoundMatches: Match[] = [];
+    const nextRoundMatches: Match[] = [];
     
     // Generate the next round of matches
     if (currentWinnersMatches.length > 0) {
@@ -508,15 +508,6 @@ export const advanceTournament = (
         }
       }
     }
-    
-    // If we have one team left in winners and one in losers, create the final match
-    const remainingWinners = matches
-      .filter(m => m.bracket === 'winners' && m.winner)
-      .map(m => m.winner!);
-    
-    const remainingLosers = matches
-      .filter(m => m.bracket === 'losers' && m.winner)
-      .map(m => m.winner!);
     
     const winnersBracketFinal = matches.find(
       m => m.bracket === 'winners' && 
