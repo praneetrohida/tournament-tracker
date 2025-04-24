@@ -14,7 +14,7 @@ function App() {
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center gap-2">
           <BadmintonIcon className="h-6 w-6" />
-          <h1 className="text-xl font-bold">Badminton Tournament Tracker</h1>
+          <h1 className="text-xl font-bold">LETS PLAY</h1>
         </div>
       </header>
 
