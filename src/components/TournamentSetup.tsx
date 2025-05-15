@@ -83,17 +83,15 @@ export function TournamentSetup() {
           >
             Start Tournament
           </Button>
-          {gameType === 'doubles' && (
-            <Button
-              onClick={() => handleGenerateTeams(true)}
-              disabled={!canGenerateTeams}
-              variant="secondary"
-              className="flex-1"
-            >
-              <Shuffle className="h-4 w-4 mr-2" />
-              Random Teams
-            </Button>
-          )}
+          <Button
+            onClick={() => handleGenerateTeams(true)}
+            disabled={!canGenerateTeams}
+            variant="secondary"
+            className="flex-1"
+          >
+            <Shuffle className="h-4 w-4 mr-2" />
+            {gameType === 'singles' ? 'Random Matches' : 'Random Teams'}
+          </Button>
         </div>
 
         {!canGenerateTeams && (
