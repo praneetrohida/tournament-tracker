@@ -1,5 +1,4 @@
 import { useAtom } from 'jotai';
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -19,17 +18,16 @@ export const TournamentSetup = () => {
   const [settings, setSettings] = useAtom(tournamentSettingsAtom);
   const [, createTournament] = useAtom(createTournamentAtom);
   const [tournamentCreated] = useAtom(tournamentCreatedAtom);
-  const [randomizeOnCreate, setRandomizeOnCreate] = useState(false);
 
   const handleCreateTournament = async () => {
     try {
-      await createTournament(randomizeOnCreate);
+      await createTournament(settings.randomizePlayers);
     } catch (error) {
       console.error('Failed to create tournament:', error);
     }
   };
 
-  const handleSettingsChange = (key: keyof TournamentSettings, value: string) => {
+  const handleSettingsChange = (key: keyof TournamentSettings, value: string | boolean) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
@@ -88,8 +86,8 @@ export const TournamentSetup = () => {
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="randomize"
-                checked={randomizeOnCreate}
-                onCheckedChange={(value) => setRandomizeOnCreate(value === true)}
+                checked={settings.randomizePlayers}
+                onCheckedChange={(value) => handleSettingsChange('randomizePlayers', value === true)}
               />
               <Label htmlFor="randomize" className="text-sm">
                 Randomize players
@@ -99,18 +97,6 @@ export const TournamentSetup = () => {
         </div>
 
         <div className="pt-4 border-t">
-          <div className="space-y-2 mb-4">
-            <p className="text-sm text-muted-foreground">
-              <strong>Players:</strong> {players.length}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <strong>Type:</strong> {settings.type === 'single_elimination' ? 'Single Elimination' : 'Double Elimination'}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <strong>Format:</strong> {settings.gameType === 'singles' ? 'Singles' : 'Doubles'}
-            </p>
-          </div>
-
           <Button 
             onClick={handleCreateTournament}
             disabled={!canCreateTournament}

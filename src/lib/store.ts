@@ -10,7 +10,8 @@ const tournamentManager = new TournamentManager();
 export const playersAtom = atomWithStorage<TournamentPlayer[]>('tournament-players', []);
 export const tournamentSettingsAtom = atomWithStorage<TournamentSettings>('tournament-settings', {
   type: 'single_elimination',
-  gameType: 'singles'
+  gameType: 'singles',
+  randomizePlayers: false
 });
 
 // Tournament state

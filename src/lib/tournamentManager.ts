@@ -10,6 +10,7 @@ export interface TournamentPlayer {
 export interface TournamentSettings {
   type: 'single_elimination' | 'double_elimination';
   gameType: 'singles' | 'doubles';
+  randomizePlayers: boolean;
 }
 
 export class TournamentManager {
