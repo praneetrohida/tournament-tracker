@@ -91,7 +91,7 @@ export const TournamentSetup = () => {
               />
               <Label htmlFor="randomize" className="text-sm">
                 Randomize players 
-              </Label>
+              </Label> 
             </div>
           </div>
         </div>
