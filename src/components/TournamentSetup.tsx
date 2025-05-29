@@ -92,12 +92,9 @@ export const TournamentSetup = () => {
                 onCheckedChange={(value) => setRandomizeOnCreate(value === true)}
               />
               <Label htmlFor="randomize" className="text-sm">
-                Randomize players when creating tournament
+                Randomize players
               </Label>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Randomize player seeding for fair bracket placement
-            </p>
           </div>
         </div>
 
