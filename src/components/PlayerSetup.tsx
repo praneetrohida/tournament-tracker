@@ -1,176 +1,92 @@
-import { useState } from 'react';
 import { useAtom } from 'jotai';
-import { Plus, GripVertical } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { playersAtom } from '@/lib/store';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import type { TournamentPlayer } from '@/lib/tournamentManager';
 
-// Sortable player item component
-function SortablePlayerItem({ player, onRemove }: { player: { id: string; name: string }; onRemove: (id: string) => void }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: player.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : 1,
-    opacity: isDragging ? 0.8 : 1,
-  };
-
-  return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
-      {...attributes} 
-      {...listeners}
-      className={`flex items-center justify-between p-2 ${isDragging ? 'bg-accent' : 'bg-muted'} rounded-md border-2 ${isDragging ? 'border-primary' : 'border-transparent'} cursor-grab active:cursor-grabbing`}
-    >
-      <div className="flex items-center gap-2">
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-        <span>{player.name}</span>
-      </div>
-      <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-        <Button 
-          variant="destructive" 
-          size="icon" 
-          onClick={() => onRemove(player.id)}
-          className="h-8 w-8 flex items-center justify-center p-0"
-          aria-label={`Remove ${player.name}`}
-        >
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            width="16" 
-            height="16" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            className="text-white"
-          >
-            <path d="M3 6h18"></path>
-            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-            <line x1="10" y1="11" x2="10" y2="17"></line>
-            <line x1="14" y1="11" x2="14" y2="17"></line>
-          </svg>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-export function PlayerSetup() {
+export const PlayerSetup = () => {
   const [players, setPlayers] = useAtom(playersAtom);
   const [newPlayerName, setNewPlayerName] = useState('');
 
-  // Set up DnD sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const addPlayer = () => {
+  const handleAddPlayer = () => {
     if (newPlayerName.trim()) {
-      setPlayers([...players, { id: crypto.randomUUID(), name: newPlayerName.trim() }]);
+      const newPlayer: TournamentPlayer = {
+        id: Date.now().toString(),
+        name: newPlayerName.trim(),
+      };
+      setPlayers([...players, newPlayer]);
       setNewPlayerName('');
     }
   };
 
-  const removePlayer = (id: string) => {
-    setPlayers(players.filter((player) => player.id !== id));
+  const handleRemovePlayer = (playerId: string) => {
+    setPlayers(players.filter(player => player.id !== playerId));
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (over && active.id !== over.id) {
-      setPlayers((players) => {
-        const oldIndex = players.findIndex((player) => player.id === active.id);
-        const newIndex = players.findIndex((player) => player.id === over.id);
-        
-        return arrayMove(players, oldIndex, newIndex);
-      });
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleAddPlayer();
     }
   };
 
   return (
-    <Accordion type="single" collapsible defaultValue="players" className="w-full">
-      <AccordionItem value="players" className="border rounded-lg overflow-hidden">
-        <div className="bg-background">
-          <AccordionTrigger className="px-6 py-4 hover:no-underline bg-white">
-            <div className="flex items-center justify-between w-full">
-              <h3 className="text-lg font-semibold">Players ({players.length})</h3>
-            </div>
-          </AccordionTrigger>
+    <Card>
+      <CardHeader>
+        <CardTitle>Players</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2">
+          <Input
+            placeholder="Enter player name"
+            value={newPlayerName}
+            onChange={(e) => setNewPlayerName(e.target.value)}
+            onKeyPress={handleKeyPress}
+            className="flex-1"
+          />
+          <Button 
+            onClick={handleAddPlayer}
+            disabled={!newPlayerName.trim()}
+            size="sm"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
-        <AccordionContent className="px-6 pb-4 pt-1 bg-background">
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter player name"
-                value={newPlayerName}
-                onChange={(e) => setNewPlayerName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addPlayer()}
-              />
-              <Button onClick={addPlayer}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add
-              </Button>
-            </div>
 
-            <DndContext 
-              sensors={sensors} 
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="grid gap-2">
-                <SortableContext items={players.map(p => p.id)} strategy={verticalListSortingStrategy}>
-                  {players.map((player) => (
-                    <SortablePlayerItem 
-                      key={player.id} 
-                      player={player} 
-                      onRemove={removePlayer} 
-                    />
-                  ))}
-                </SortableContext>
-              </div>
-            </DndContext>
+        {players.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">
+              Players ({players.length})
+            </h4>
+            <div className="space-y-1">
+              {players.map((player) => (
+                <div
+                  key={player.id}
+                  className="flex items-center justify-between p-2 bg-muted rounded-md"
+                >
+                  <span className="text-sm">{player.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemovePlayer(player.id)}
+                    className="h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
+        )}
+
+        {players.length < 2 && (
+          <p className="text-sm text-muted-foreground">
+            Add at least 2 players to start a tournament
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
-}
+}; 

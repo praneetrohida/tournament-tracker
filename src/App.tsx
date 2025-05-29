@@ -1,13 +1,13 @@
 import { useAtom } from 'jotai';
 import { Trophy as BadmintonIcon } from 'lucide-react';
-import { isSetupCompleteAtom } from './lib/store';
+import { tournamentCreatedAtom } from './lib/store';
 import { PlayerSetup } from './components/PlayerSetup';
 import { TournamentSetup } from './components/TournamentSetup';
 import { TournamentView } from './components/TournamentView';
 
 function App() {
   console.log('rendering app');
-  const [isSetupComplete] = useAtom(isSetupCompleteAtom);
+  const [tournamentCreated] = useAtom(tournamentCreatedAtom);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -19,7 +19,7 @@ function App() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {!isSetupComplete ? (
+        {!tournamentCreated ? (
           <div className="max-w-2xl mx-auto space-y-8">
             <PlayerSetup />
             <TournamentSetup />

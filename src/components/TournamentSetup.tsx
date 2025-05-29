@@ -1,105 +1,113 @@
 import { useAtom } from 'jotai';
-import { Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  gameTypeAtom,
-  tournamentTypeAtom,
-  playersAtom,
-  teamsAtom,
-  matchesAtom,
-  GameType,
-  TournamentType,
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  playersAtom, 
+  tournamentSettingsAtom, 
+  createTournamentAtom, 
+  tournamentCreatedAtom 
 } from '@/lib/store';
+import type { TournamentSettings } from '@/lib/tournamentManager';
 
-// Import tournament logic functions
-import { generateTeams, generateMatches } from '@/lib/tournament';
-
-export function TournamentSetup() {
+export const TournamentSetup = () => {
   const [players] = useAtom(playersAtom);
-  const [gameType, setGameType] = useAtom(gameTypeAtom);
-  const [tournamentType, setTournamentType] = useAtom(tournamentTypeAtom);
-  const [, setTeams] = useAtom(teamsAtom);
-  const [, setMatches] = useAtom(matchesAtom);
+  const [settings, setSettings] = useAtom(tournamentSettingsAtom);
+  const [, createTournament] = useAtom(createTournamentAtom);
+  const [tournamentCreated] = useAtom(tournamentCreatedAtom);
 
-  const handleGenerateTeams = (randomize = false) => {
-    // Use the extracted logic function to generate teams
-    const teams = generateTeams(players, gameType, randomize);
-    setTeams(teams);
-    
-    // Use the extracted logic function to generate matches
-    const matches = generateMatches(teams, tournamentType);
-    setMatches(matches);
+  const handleCreateTournament = async () => {
+    try {
+      await createTournament();
+    } catch (error) {
+      console.error('Failed to create tournament:', error);
+    }
   };
 
-  const canGenerateTeams = players.length >= (gameType === 'singles' ? 2 : 4);
+  const handleSettingsChange = (key: keyof TournamentSettings, value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const canCreateTournament = players.length >= 2 && !tournamentCreated;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tournament Setup</CardTitle>
+        <CardTitle>Tournament Settings</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Game Type</label>
-            <Select value={gameType} onValueChange={(value: GameType) => setGameType(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="singles">Singles</SelectItem>
-                <SelectItem value="doubles">Doubles</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Tournament Type</label>
-            <Select value={tournamentType} onValueChange={(value: TournamentType) => setTournamentType(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="knockout">Knockout</SelectItem>
-                <SelectItem disabled value="double-elimination">Double Elimination (coming soon)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <CardContent className="space-y-6">
+        <div className="space-y-3">
+          <Label className="text-sm font-medium">Tournament Type</Label>
+          <RadioGroup
+            value={settings.type}
+            onValueChange={(value) => handleSettingsChange('type', value)}
+            className="grid grid-cols-1 gap-2"
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="single_elimination" id="single" />
+              <Label htmlFor="single" className="text-sm">
+                Single Elimination
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="double_elimination" id="double" />
+              <Label htmlFor="double" className="text-sm">
+                Double Elimination
+              </Label>
+            </div>
+          </RadioGroup>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            onClick={() => handleGenerateTeams(false)}
-            disabled={!canGenerateTeams}
-            className="flex-1"
+        <div className="space-y-3">
+          <Label className="text-sm font-medium">Game Type</Label>
+          <Select
+            value={settings.gameType}
+            onValueChange={(value) => handleSettingsChange('gameType', value)}
           >
-            Start Tournament
-          </Button>
-          <Button
-            onClick={() => handleGenerateTeams(true)}
-            disabled={!canGenerateTeams}
-            variant="secondary"
-            className="flex-1"
-          >
-            <Shuffle className="h-4 w-4 mr-2" />
-            {gameType === 'singles' ? 'Random Matches' : 'Random Teams'}
-          </Button>
+            <SelectTrigger>
+              <SelectValue placeholder="Select game type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="singles">Singles</SelectItem>
+              <SelectItem value="doubles">Doubles</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {!canGenerateTeams && (
-          <p className="text-sm text-muted-foreground">
-            Add {gameType === 'singles' ? '2' : '4'} or more players to generate teams
-          </p>
-        )}
+        <div className="pt-4 border-t">
+          <div className="space-y-2 mb-4">
+            <p className="text-sm text-muted-foreground">
+              <strong>Players:</strong> {players.length}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <strong>Type:</strong> {settings.type === 'single_elimination' ? 'Single Elimination' : 'Double Elimination'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <strong>Format:</strong> {settings.gameType === 'singles' ? 'Singles' : 'Doubles'}
+            </p>
+          </div>
+
+          <Button 
+            onClick={handleCreateTournament}
+            disabled={!canCreateTournament}
+            className="w-full"
+            size="lg"
+          >
+            {tournamentCreated ? 'Tournament Created' : 'Create Tournament'}
+          </Button>
+
+          {players.length < 2 && (
+            <p className="text-sm text-muted-foreground mt-2 text-center">
+              Add at least 2 players to create a tournament
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
-}
+}; 

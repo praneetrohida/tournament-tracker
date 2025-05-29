@@ -1,53 +1,129 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
+import { TournamentManager, type TournamentPlayer, type TournamentSettings } from './tournamentManager';
 
-export type Player = {
-  id: string;
-  name: string;
-};
+// Tournament Manager instance
+const tournamentManager = new TournamentManager();
 
-export type Team = {
-  id: string;
-  players: Player[];
-};
+// Basic tournament settings
+export const playersAtom = atomWithStorage<TournamentPlayer[]>('tournament-players', []);
+export const tournamentSettingsAtom = atomWithStorage<TournamentSettings>('tournament-settings', {
+  type: 'single_elimination',
+  gameType: 'singles'
+});
 
-export type Match = {
-  id: string;
-  team1: Team;
-  team2: Team;
-  winner?: Team;
-  round: number;
-  bracket?: 'winners' | 'losers' | 'final';
-};
-
-export type TournamentType = 'knockout' | 'double-elimination';
-export type GameType = 'singles' | 'doubles';
-
-export const playersAtom = atomWithStorage<Player[]>('players', []);
-export const gameTypeAtom = atomWithStorage<GameType>('gameType', 'singles');
-export const tournamentTypeAtom = atomWithStorage<TournamentType>('tournamentType', 'knockout');
-export const teamsAtom = atomWithStorage<Team[]>('teams', []);
-export const matchesAtom = atomWithStorage<Match[]>('matches', []);
-export const currentRoundAtom = atomWithStorage<number>('currentRound', 1);
+// Tournament state
+export const tournamentCreatedAtom = atomWithStorage<boolean>('tournament-created', false);
+export const tournamentDataAtom = atom<any>(null);
 
 // Derived atoms
 export const isSetupCompleteAtom = atom(
   (get) => {
     const players = get(playersAtom);
-    const teams = get(teamsAtom);
-    return players.length > 0 && teams.length > 0;
-  },
-  (get, set) => {
-    console.log(typeof get)
-    // Reset tournament
-    set(teamsAtom, []);
-    set(matchesAtom, []);
-    set(currentRoundAtom, 1);
+    return players.length >= 2; // Need at least 2 players for a tournament
   }
 );
 
-export const currentMatchesAtom = atom((get) => {
-  const matches = get(matchesAtom);
-  const currentRound = get(currentRoundAtom);
-  return matches.filter((match) => match.round === currentRound);
-});
+// Actions
+export const createTournamentAtom = atom(
+  null,
+  async (get, set) => {
+    const players = get(playersAtom);
+    const settings = get(tournamentSettingsAtom);
+    
+    if (players.length < 2) {
+      throw new Error('Need at least 2 players to create a tournament');
+    }
+
+    try {
+      await tournamentManager.createTournament(players, settings);
+      set(tournamentCreatedAtom, true);
+      
+      // Get initial tournament data
+      const data = await tournamentManager.getViewerData();
+      const dataWithTimestamp = {
+        ...data,
+        _lastUpdated: Date.now()
+      };
+      set(tournamentDataAtom, dataWithTimestamp);
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to create tournament:', error);
+      throw error;
+    }
+  }
+);
+
+export const updateMatchAtom = atom(
+  null,
+  async (_, set, { matchId, opponent1Score, opponent2Score }: { 
+    matchId: number; 
+    opponent1Score: number; 
+    opponent2Score: number; 
+  }) => {
+    try {
+      console.log('updateMatchAtom: Starting match update', { matchId, opponent1Score, opponent2Score });
+      
+      const updateResult = await tournamentManager.updateMatch(matchId, opponent1Score, opponent2Score);
+      console.log('updateMatchAtom: TournamentManager.updateMatch result:', updateResult);
+      
+      // Refresh tournament data
+      console.log('updateMatchAtom: Refreshing tournament data...');
+      const data = await tournamentManager.getViewerData();
+      console.log('updateMatchAtom: New tournament data:', data);
+      
+      // Add timestamp to ensure the object reference changes and triggers re-renders
+      const dataWithTimestamp = {
+        ...data,
+        _lastUpdated: Date.now()
+      };
+      
+      set(tournamentDataAtom, dataWithTimestamp);
+      console.log('updateMatchAtom: Tournament data atom updated with timestamp');
+      
+      return true;
+    } catch (error) {
+      console.error('updateMatchAtom: Failed to update match:', error);
+      throw error;
+    }
+  }
+);
+
+export const resetTournamentAtom = atom(
+  null,
+  async (_, set) => {
+    try {
+      await tournamentManager.resetTournament();
+      set(tournamentCreatedAtom, false);
+      set(tournamentDataAtom, null);
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to reset tournament:', error);
+      throw error;
+    }
+  }
+);
+
+export const refreshTournamentDataAtom = atom(
+  null,
+  async (_, set) => {
+    try {
+      const data = await tournamentManager.getViewerData();
+      const dataWithTimestamp = {
+        ...data,
+        _lastUpdated: Date.now()
+      };
+      set(tournamentDataAtom, dataWithTimestamp);
+      return dataWithTimestamp;
+    } catch (error) {
+      console.error('Failed to refresh tournament data:', error);
+      throw error;
+    }
+  }
+);
+
+// Export the tournament manager for direct access if needed
+export { tournamentManager }; 

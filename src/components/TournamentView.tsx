@@ -1,464 +1,448 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useAtom } from 'jotai';
-import { Trophy, ArrowLeft, ChevronDown, ChevronUp, FastForward } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import {
-  matchesAtom,
-  currentRoundAtom,
-  currentMatchesAtom,
-  tournamentTypeAtom,
-  isSetupCompleteAtom,
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RotateCcw, Trophy } from 'lucide-react';
+import { 
+  tournamentDataAtom, 
+  updateMatchAtom, 
+  resetTournamentAtom
 } from '@/lib/store';
-import type { Match, Team } from '@/lib/store';
-import { useState, useMemo } from 'react';
-// Import tournament logic
-import {
-  updateMatchWithWinner,
-  getMatchesForRound,
-  getAllRounds,
-  isByeMatch,
-  isTournamentComplete,
-  getTournamentChampion,
-  advanceTournament,
-  getTeamDisplay,
-  getMatchTitle
-} from '@/lib/tournament';
 
-export function TournamentView() {
-  const [matches, setMatches] = useAtom(matchesAtom);
-  const [currentRound, setCurrentRound] = useAtom(currentRoundAtom);
-  const [currentMatches] = useAtom(currentMatchesAtom);
-  const [tournamentType] = useAtom(tournamentTypeAtom);
-  const [, endTournament] = useAtom(isSetupCompleteAtom);
-  const [showBracket, setShowBracket] = useState(false);
+// Import brackets-viewer
+declare global {
+  interface Window {
+    bracketsViewer: any;
+  }
+}
 
-  // Sort the current matches to have bye matches at the end
-  const sortedMatches = useMemo(() => {
-    return [...currentMatches].sort((a, b) => {
-      // If a is a bye match and b is not, a should come after b
-      if (isByeMatch(a) && !isByeMatch(b)) return 1;
-      // If a is not a bye match and b is, a should come before b
-      if (!isByeMatch(a) && isByeMatch(b)) return -1;
-      // Both are the same type, maintain original order
-      return 0;
-    });
-  }, [currentMatches]);
+export const TournamentView = () => {
+  const [tournamentData] = useAtom(tournamentDataAtom);
+  const [, updateMatch] = useAtom(updateMatchAtom);
+  const [, resetTournament] = useAtom(resetTournamentAtom);
+  
+  const [selectedMatch, setSelectedMatch] = useState<any>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [currentMatch, setCurrentMatch] = useState<any>(null);
+  
+  const bracketRef = useRef<HTMLDivElement>(null);
 
-  // Calculate all rounds and the max round (final round) once
-  const { allRounds, maxRound } = useMemo(() => {
-    const rounds = getAllRounds(matches);
-    
-    // Extract all unique teams from the tournament
-    const uniqueTeamIds = new Set<string>();
-    matches.forEach(match => {
-      if (match.team1?.id) uniqueTeamIds.add(match.team1.id);
-      if (match.team2?.id) uniqueTeamIds.add(match.team2.id);
-    });
-    
-    const teamCount = uniqueTeamIds.size;
-    
-    // For a knockout tournament, max rounds = ceiling(log2(teamCount))
-    // This is because each round reduces the number of teams by half
-    const calculatedMaxRound = teamCount > 0 ? Math.ceil(Math.log2(teamCount)) : 0;
-    
-    return { 
-      allRounds: rounds, 
-      // If we can calculate it from team count, use that, otherwise fall back to current calculation
-      maxRound: calculatedMaxRound || (rounds.length > 0 ? Math.max(...rounds) : 0)
+  // Auto-reset when tournament state is inconsistent
+  useEffect(() => {
+    // If we're on the tournament view but have no tournament data,
+    // it means the state is inconsistent - reset to home screen
+    if (!tournamentData || !tournamentData.matches || tournamentData.matches.length === 0) {
+      console.log('Inconsistent tournament state detected - no data available, resetting...');
+      const timer = setTimeout(async () => {
+        try {
+          await resetTournament();
+          console.log('Tournament state reset due to missing data');
+        } catch (error) {
+          console.error('Failed to reset inconsistent tournament state:', error);
+        }
+      }, 1000); // Small delay to avoid immediate reset on initial load
+
+      return () => clearTimeout(timer);
+    }
+  }, [tournamentData, resetTournament]);
+
+  // Load brackets-viewer script
+  useEffect(() => {
+    const loadBracketsViewer = async () => {
+      if (window.bracketsViewer) return;
+
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/brackets-viewer@1.6.2/dist/brackets-viewer.min.js';
+      script.onload = () => {
+        console.log('Brackets viewer loaded');
+        renderBracket();
+      };
+      document.head.appendChild(script);
+
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/brackets-viewer@1.6.2/dist/brackets-viewer.min.css';
+      document.head.appendChild(link);
     };
-  }, [matches]);
 
-  const handleWinner = (match: Match, winner: Team) => {
-    // Update the current match with the winner using the extracted logic
-    const updatedMatches = updateMatchWithWinner(matches, match.id, winner);
-    
-    // Get matches for the current round with updated winners
-    const updatedCurrentRoundMatches = getMatchesForRound(updatedMatches, currentRound);
-    
-    // Check if all matches in the current round are complete
-    const roundComplete = updatedCurrentRoundMatches.every(m => m.winner);
-    
-    if (roundComplete) {
-      // Use the advanceTournament function to handle tournament advancement
-      const { matches: finalMatches, nextRound } = advanceTournament(
-        updatedMatches, 
-        currentRound, 
-        tournamentType
-      );
+    loadBracketsViewer();
+  }, []);
+
+  // Render bracket when data changes
+  useEffect(() => {
+    if (window.bracketsViewer && tournamentData) {
+      console.log('Tournament data changed, re-rendering bracket...', tournamentData);
+      // Small delay to ensure DOM is ready and data is fully updated
+      setTimeout(() => {
+        renderBracket();
+      }, 100);
+    }
+  }, [tournamentData]);
+
+  const renderBracket = () => {
+    if (!window.bracketsViewer || !bracketRef.current || !tournamentData) return;
+
+    try {
+      console.log('Rendering bracket with data:', tournamentData);
       
-      setMatches(finalMatches);
-      
-      // Only advance the round if it actually changed
-      if (nextRound !== currentRound) {
-        setCurrentRound(nextRound);
+      // Clear existing bracket content before rendering new one
+      if (bracketRef.current) {
+        bracketRef.current.innerHTML = '';
       }
-    } else {
-      // Just update matches if round is not complete yet
-      setMatches(updatedMatches);
+      
+      // Process matches to include participant data for brackets-viewer
+      const processedMatches = tournamentData.matches.map((match: any) => {
+        const getParticipant = (opponentId: number | null) => {
+          if (!opponentId) return null;
+          return tournamentData.participants.find((p: any) => p.id === opponentId);
+        };
+
+        return {
+          ...match,
+          opponent1: match.opponent1?.id ? {
+            ...match.opponent1,
+            participant: getParticipant(match.opponent1.id)
+          } : match.opponent1,
+          opponent2: match.opponent2?.id ? {
+            ...match.opponent2,
+            participant: getParticipant(match.opponent2.id)
+          } : match.opponent2,
+        };
+      });
+
+      window.bracketsViewer.render(
+        {
+          stages: tournamentData.stages,
+          matches: processedMatches,
+          matchGames: tournamentData.matchGames,
+          participants: tournamentData.participants,
+        },
+        {
+          selector: '#tournament-bracket',
+          participantOriginPlacement: 'before',
+          separatedChildCountLabel: true,
+          showSlotsOrigin: true,
+          showLowerBracketSlotsOrigin: true,
+          highlightParticipantOnHover: true,
+          onMatchClick: (match: any, info: any) => {
+            console.log('Match clicked:', match);
+            console.log('Click info:', info);
+            console.log('Match status:', match.status);
+            
+            // Convert numeric status to string for comparison
+            const getMatchStatus = (status: number) => {
+              switch (status) {
+                case 2: return 'ready';
+                default: return 'not-ready';
+              }
+            };
+            
+            const stringStatus = getMatchStatus(match.status);
+            if (stringStatus === 'ready') {
+              // Simple approach: Always show the dialog for match clicks
+              // Users can use the manual selection buttons below for direct winner selection
+              setCurrentMatch(match);
+              setSelectedMatch(match);
+              setIsDialogOpen(true);
+            } else {
+              console.log('Match not ready, status:', match.status);
+            }
+          },
+        }
+      );
+    } catch (error) {
+      console.error('Error rendering bracket:', error);
     }
   };
 
-  // Check if tournament is complete using the extracted logic
-  const isComplete = (): boolean => {
-    return isTournamentComplete(matches, currentRound, tournamentType);
+  const handleResetTournament = async () => {
+    if (confirm('Are you sure you want to end the tournament? This will delete all progress.')) {
+      try {
+        await resetTournament();
+      } catch (error) {
+        console.error('Failed to reset tournament:', error);
+      }
+    }
   };
 
-  // Get the tournament champion using the extracted logic
-  const getChampion = (): Team | null => {
-    return getTournamentChampion(matches, currentRound, tournamentType);
+  const handleSelectWinner = async (winner: number, match?: any) => {
+    const targetMatch = match || currentMatch || selectedMatch;
+    if (!targetMatch) return;
+
+    try {
+      console.log('Selecting winner:', winner, 'for match:', targetMatch);
+      
+      // Use scores to determine winner: winner gets 1, loser gets 0
+      const opponent1Score = winner === 1 ? 1 : 0;
+      const opponent2Score = winner === 2 ? 1 : 0;
+      
+      await updateMatch({
+        matchId: targetMatch.id,
+        opponent1Score,
+        opponent2Score,
+      });
+      
+      setIsDialogOpen(false);
+      setSelectedMatch(null);
+      setCurrentMatch(null);
+      
+      // The updateMatch atom already refreshes tournament data automatically
+      // Just ensure the bracket re-renders with the updated data
+      console.log('Match updated, bracket will re-render with new data...');
+      
+    } catch (error) {
+      console.error('Failed to update match:', error);
+    }
   };
+
+  if (!tournamentData || !tournamentData.matches || tournamentData.matches.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center space-y-4">
+          <div className="flex flex-col items-center gap-2">
+            <Trophy className="h-12 w-12 text-muted-foreground" />
+            <p className="text-lg font-semibold">No Tournament Data Available</p>
+            <p className="text-muted-foreground text-sm">
+              The tournament state appears to be corrupted or missing.
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Automatically resetting in a moment...
+            </p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              try {
+                await resetTournament();
+              } catch (error) {
+                console.error('Manual reset failed:', error);
+              }
+            }}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset Now
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">
-          {currentRound === maxRound ? "Final Round" : `Round ${currentRound}`}
-        </h2>
+        <div className="flex items-center gap-2">
+          <Trophy className="h-6 w-6" />
+          <h2 className="text-2xl font-bold">Tournament Bracket</h2>
+        </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowBracket(!showBracket)}
-            className="flex items-center gap-2"
-          >
-            {showBracket ? (
-              <>
-                <ChevronUp className="h-4 w-4" />
-                Hide Bracket
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4" />
-                View Bracket
-              </>
-            )}
+          <Button variant="destructive" onClick={handleResetTournament}>
+            <RotateCcw className="h-4 w-4 mr-2" />
+            End
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                End Tournament
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>End Tournament</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to end this tournament? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={endTournament}>
-                  End Tournament
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </div>
 
-      {showBracket && (
+      {/* Winner Selection Interface */}
+      {tournamentData?.matches && (
         <Card>
-          <CardHeader>
-            <CardTitle>Tournament Bracket</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {tournamentType === 'double-elimination' ? (
-              // Double elimination bracket view with winners and losers brackets
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Winners Bracket</h3>
-                  <div className="overflow-x-auto">
-                    <div className="flex gap-4 min-w-[600px]">
-                      {allRounds.map((round: number) => {
-                        // Get matches for this round in winners bracket
-                        const roundMatches = matches
-                          .filter(m => m.round === round && m.bracket === 'winners')
-                          .sort((a, b) => {
-                            if (isByeMatch(a) && !isByeMatch(b)) return 1;
-                            if (!isByeMatch(a) && isByeMatch(b)) return -1;
-                            return 0;
-                          });
-
-                        if (roundMatches.length === 0) return null;
-
-                        // Check if this is the final round
-                        const isFinalRound = round === maxRound;
-
-                        return (
-                          <div key={`winners-${round}`} className="flex-1">
-                            <div className="font-medium text-center mb-2">
-                              {isFinalRound ? "Final Round" : `Round ${round}`}
-                            </div>
-                            <div className="space-y-6">
-                              {roundMatches.map((match: Match) => (
-                                <div 
-                                  key={match.id} 
-                                  className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
-                                >
-                                  <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                    {getTeamDisplay(match.team1)}
-                                  </div>
-                                  <div className="h-px bg-border my-1"></div>
-                                  {isByeMatch(match) ? (
-                                    <div className="p-1 text-xs text-muted-foreground flex items-center justify-center gap-1">
-                                      <FastForward className="h-3.5 w-3.5 text-primary" />
-                                      <span>Automatic advance</span>
-                                    </div>
-                                  ) : (
-                                    <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                      {getTeamDisplay(match.team2)}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Losers Bracket</h3>
-                  <div className="overflow-x-auto">
-                    <div className="flex gap-4 min-w-[600px]">
-                      {allRounds.map((round: number) => {
-                        // Get matches for this round in losers bracket
-                        const roundMatches = matches
-                          .filter(m => m.round === round && m.bracket === 'losers')
-                          .sort((a, b) => {
-                            if (isByeMatch(a) && !isByeMatch(b)) return 1;
-                            if (!isByeMatch(a) && isByeMatch(b)) return -1;
-                            return 0;
-                          });
-
-                        if (roundMatches.length === 0) return null;
-
-                        return (
-                          <div key={`losers-${round}`} className="flex-1">
-                            <div className="font-medium text-center mb-2">
-                              {`Round ${round}`}
-                            </div>
-                            <div className="space-y-6">
-                              {roundMatches.map((match: Match) => (
-                                <div 
-                                  key={match.id} 
-                                  className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
-                                >
-                                  <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                    {getTeamDisplay(match.team1)}
-                                  </div>
-                                  <div className="h-px bg-border my-1"></div>
-                                  {isByeMatch(match) ? (
-                                    <div className="p-1 text-xs text-muted-foreground flex items-center justify-center gap-1">
-                                      <FastForward className="h-3.5 w-3.5 text-primary" />
-                                      <span>Automatic advance</span>
-                                    </div>
-                                  ) : (
-                                    <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                      {getTeamDisplay(match.team2)}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Finals</h3>
-                  <div className="overflow-x-auto">
-                    <div className="flex gap-4 min-w-[600px]">
-                      {allRounds.map((round: number) => {
-                        // Get matches for this round in finals
-                        const roundMatches = matches
-                          .filter(m => m.round === round && m.bracket === 'final')
-                          .sort((a, b) => {
-                            if (isByeMatch(a) && !isByeMatch(b)) return 1;
-                            if (!isByeMatch(a) && isByeMatch(b)) return -1;
-                            return 0;
-                          });
-
-                        if (roundMatches.length === 0) return null;
-
-                        return (
-                          <div key={`final-${round}`} className="flex-1">
-                            <div className="font-medium text-center mb-2">
-                              {roundMatches.length > 1 ? "Final Matches" : "Championship Match"}
-                            </div>
-                            <div className="space-y-6">
-                              {roundMatches.map((match: Match) => (
-                                <div 
-                                  key={match.id} 
-                                  className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
-                                >
-                                  <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                    {getTeamDisplay(match.team1)}
-                                  </div>
-                                  <div className="h-px bg-border my-1"></div>
-                                  <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                    {getTeamDisplay(match.team2)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // Regular knockout bracket view
-              <div className="overflow-x-auto">
-                <div className="flex gap-4 min-w-[600px]">
-                  {allRounds.map((round: number) => {
-                    // Get matches for this round and sort them (bye matches at the bottom)
-                    const roundMatches = getMatchesForRound(matches, round).sort((a, b) => {
-                      // If a is a bye match and b is not, a should come after b
-                      if (isByeMatch(a) && !isByeMatch(b)) return 1;
-                      // If a is not a bye match and b is, a should come before b
-                      if (!isByeMatch(a) && isByeMatch(b)) return -1;
-                      // Both are the same type, maintain original order
-                      return 0;
-                    });
-
-                    // Check if this is the final round
-                    const isFinalRound = round === maxRound;
-
-                    return (
-                      <div key={round} className="flex-1">
-                        <div className="font-medium text-center mb-2">
-                          {isFinalRound ? "Final Round" : `Round ${round}`}
-                        </div>
-                        <div className="space-y-6">
-                          {roundMatches.map((match: Match) => (
-                            <div 
-                              key={match.id} 
-                              className={`border rounded-md p-2 ${match.round === currentRound ? 'border-primary' : 'border-muted'}`}
-                            >
-                              <div className={`p-1 text-sm ${match.winner?.id === match.team1.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                {getTeamDisplay(match.team1)}
-                              </div>
-                              <div className="h-px bg-border my-1"></div>
-                              {isByeMatch(match) ? (
-                                <div className="p-1 text-xs text-muted-foreground flex items-center justify-center gap-1">
-                                  <FastForward className="h-3.5 w-3.5 text-primary" />
-                                  <span>Automatic advance</span>
-                                </div>
-                              ) : (
-                                <div className={`p-1 text-sm ${match.winner?.id === match.team2.id ? 'bg-primary/10 font-medium' : ''}`}>
-                                  {getTeamDisplay(match.team2)}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {isComplete() ? (
-        <Card className="col-span-2">
-          <CardContent className="py-8 text-center">
-            <Trophy className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
-            <h3 className="text-2xl font-bold mb-2">Tournament Champion!</h3>
-            <div className="bg-primary/10 py-3 px-4 rounded-md inline-block mx-auto mb-3">
-              <p className="text-xl font-bold">{getChampion() ? getTeamDisplay(getChampion()!) : ''}</p>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Trophy className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Select Match Winners</h3>
+              <span className="text-sm text-muted-foreground">
+                Click on a player's name to select them as the winner
+              </span>
             </div>
-            <p className="text-muted-foreground">
-              Click "End Tournament" to start a new one
-            </p>
+            <div className="space-y-2">
+              {tournamentData.matches.map((match: any) => {
+                // Convert numeric status to string
+                const getMatchStatus = (status: number) => {
+                  switch (status) {
+                    case 0: return 'waiting';
+                    case 1: return 'locked';
+                    case 2: return 'ready';
+                    case 3: return 'running';
+                    case 4: return 'completed';
+                    default: return 'unknown';
+                  }
+                };
+
+                // Get participant names by ID
+                const getParticipantName = (participantId: number | null) => {
+                  if (!participantId) return 'TBD';
+                  const participant = tournamentData.participants.find((p: any) => p.id === participantId);
+                  return participant?.name || `Player ${participantId}`;
+                };
+
+                const status = getMatchStatus(match.status);
+                const player1Name = getParticipantName(match.opponent1?.id);
+                const player2Name = getParticipantName(match.opponent2?.id);
+
+                return (
+                  <div
+                    key={match.id}
+                    className={`p-3 border rounded-md transition-colors ${
+                      status === 'ready' 
+                        ? 'bg-green-50 border-green-200' 
+                        : status === 'completed'
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <span className="text-sm font-medium">Match {match.number || match.id}</span>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          status === 'ready' 
+                            ? 'bg-green-100 text-green-800 font-medium' 
+                            : status === 'completed'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-gray-200 text-gray-600'
+                        }`}>
+                          {status === 'ready' ? '⚡ Ready to Play' : status === 'completed' ? '✅ Complete' : status}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {status === 'ready' ? (
+                      <div className="mt-3 flex items-center justify-between">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            console.log('Manual winner selection - Player 1:', player1Name);
+                            const fullMatch = {
+                              ...match,
+                              status,
+                              opponent1: { 
+                                ...match.opponent1,
+                                participant: { name: player1Name }
+                              },
+                              opponent2: { 
+                                ...match.opponent2,
+                                participant: { name: player2Name }
+                              }
+                            };
+                            handleSelectWinner(1, fullMatch);
+                          }}
+                          className="flex-1 mr-2 hover:bg-green-100 hover:border-green-300"
+                        >
+                          <Trophy className="h-3 w-3 mr-1" />
+                          {player1Name}
+                        </Button>
+                        <span className="text-xs text-muted-foreground mx-2 font-medium">vs</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            console.log('Manual winner selection - Player 2:', player2Name);
+                            const fullMatch = {
+                              ...match,
+                              status,
+                              opponent1: { 
+                                ...match.opponent1,
+                                participant: { name: player1Name }
+                              },
+                              opponent2: { 
+                                ...match.opponent2,
+                                participant: { name: player2Name }
+                              }
+                            };
+                            handleSelectWinner(2, fullMatch);
+                          }}
+                          className="flex-1 ml-2 hover:bg-green-100 hover:border-green-300"
+                        >
+                          <Trophy className="h-3 w-3 mr-1" />
+                          {player2Name}
+                        </Button>
+                      </div>
+                    ) : status === 'completed' ? (
+                      <div className="mt-3 flex items-center justify-center text-blue-700 text-sm font-medium">
+                        <span className={match.opponent1?.result === 'win' ? 'font-bold' : ''}>{player1Name}</span>
+                        <span className="mx-2">vs</span>
+                        <span className={match.opponent2?.result === 'win' ? 'font-bold' : ''}>{player2Name}</span>
+                        <span className="ml-4 text-xs">
+                          Winner: {match.opponent1?.result === 'win' ? player1Name : player2Name}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex items-center justify-center text-muted-foreground text-sm">
+                        <span>{player1Name}</span>
+                        <span className="mx-2">vs</span>
+                        <span>{player2Name}</span>
+                        <span className="ml-4 text-xs">Waiting for previous matches</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {tournamentData.matches.length === 0 && (
+                <p className="text-muted-foreground text-center py-4">
+                  No matches found
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
-      ) : currentMatches.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <Trophy className="h-8 w-8 mx-auto mb-4" />
-            <h3 className="text-xl font-bold">Tournament Complete!</h3>
-            <p className="text-muted-foreground mt-2">
-              Click "End Tournament" to start a new one
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {sortedMatches.map((match) => (
-            <Card key={match.id} className="w-full">
-              <CardHeader>
-                <CardTitle className="text-lg">{getMatchTitle(match)}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isByeMatch(match) ? (
-                  <div className="py-4 text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <FastForward className="h-5 w-5 text-primary" />
-                      <span className="text-primary font-medium">Bye Match</span>
-                    </div>
-                    <p className="text-muted-foreground">
-                      {getTeamDisplay(match.team1)} advances automatically
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Button
-                        variant={match.winner?.id === match.team1.id ? "default" : "outline"}
-                        className="justify-start w-full"
-                        onClick={() => handleWinner(match, match.team1)}
-                        disabled={!!match.winner}
-                      >
-                        {match.winner?.id === match.team1.id && (
-                          <Trophy className="h-4 w-4 mr-2" />
-                        )}
-                        {getTeamDisplay(match.team1)}
-                      </Button>
-                      <Button
-                        variant={match.winner?.id === match.team2.id ? "default" : "outline"}
-                        className="justify-start w-full"
-                        onClick={() => handleWinner(match, match.team2)}
-                        disabled={!!match.winner}
-                      >
-                        {match.winner?.id === match.team2.id && (
-                          <Trophy className="h-4 w-4 mr-2" />
-                        )}
-                        {getTeamDisplay(match.team2)}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       )}
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-semibold">Tournament Bracket View</h3>
+            <span className="text-sm text-muted-foreground">
+              Visual representation of the tournament progress
+            </span>
+          </div>
+          <div 
+            id="tournament-bracket"
+            ref={bracketRef} 
+            className="brackets-viewer"
+            style={{ minHeight: '400px' }}
+          />
+        </CardContent>
+      </Card>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Winner</DialogTitle>
+          </DialogHeader>
+          {selectedMatch && (
+            <div className="space-y-4">
+              <p className="text-center text-muted-foreground">
+                Who won this match?
+              </p>
+              <div className="grid grid-cols-1 gap-3">
+                <Button
+                  size="lg"
+                  onClick={() => handleSelectWinner(1)}
+                  className="justify-center h-12"
+                >
+                  <Trophy className="h-4 w-4 mr-2" />
+                  {selectedMatch.opponent1?.participant?.name || 'Player 1'}
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => handleSelectWinner(2)}
+                  className="justify-center h-12"
+                >
+                  <Trophy className="h-4 w-4 mr-2" />
+                  {selectedMatch.opponent2?.participant?.name || 'Player 2'}
+                </Button>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="ghost" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+}; 
