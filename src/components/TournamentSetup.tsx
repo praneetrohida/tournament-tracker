@@ -90,8 +90,8 @@ export const TournamentSetup = () => {
                 onCheckedChange={(value) => handleSettingsChange('randomizePlayers', value === true)}
               />
               <Label htmlFor="randomize" className="text-sm">
-                Randomize players
-              </Label>
+                Randomize players 
+              </Label> 
             </div>
           </div>
         </div>
