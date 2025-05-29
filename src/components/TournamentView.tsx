@@ -232,22 +232,78 @@ export const TournamentView = () => {
   useEffect(() => {
     if (!tournamentData?.matches) return;
 
-    // Find the final round (highest round_id)
-    const maxRound = Math.max(...tournamentData.matches.map((m: any) => m.round_id));
-    const finalMatches = tournamentData.matches.filter((m: any) => m.round_id === maxRound);
+    // For double elimination, we need to check if the tournament is actually complete
+    // not just if the highest round match is completed
+    const stage = tournamentData.stages?.[0];
+    const isDoubleElimination = stage?.type === 'double_elimination';
     
-    // Check if any final match is completed
-    const completedFinalMatch = finalMatches.find((m: any) => m.status === 4);
-    
-    if (completedFinalMatch && !showVictoryModal && !victoryShown) {
-      // Determine the winner
-      const winnerId = completedFinalMatch.opponent1?.result === 'win' 
-        ? completedFinalMatch.opponent1?.id 
-        : completedFinalMatch.opponent2?.id;
+    if (isDoubleElimination) {
+      // Debug: Show all matches and their structure
+      console.log('=== ALL TOURNAMENT MATCHES ===');
+      tournamentData.matches.forEach((match: any) => {
+        console.log(`Match ${match.id}: Group ${match.group_id}, Round ${match.round_id}, Status ${match.status}`, {
+          opponent1: match.opponent1?.id,
+          opponent2: match.opponent2?.id,
+          result1: match.opponent1?.result,
+          result2: match.opponent2?.result
+        });
+      });
       
-      if (winnerId) {
+      // Group matches by group_id to understand bracket structure
+      const matchesByGroup = tournamentData.matches.reduce((acc: any, match: any) => {
+        if (!acc[match.group_id]) acc[match.group_id] = [];
+        acc[match.group_id].push(match);
+        return acc;
+      }, {});
+      
+      console.log('=== MATCHES BY GROUP ===');
+      Object.keys(matchesByGroup).forEach(groupId => {
+        console.log(`Group ${groupId}:`, matchesByGroup[groupId].map((m: any) => ({
+          id: m.id,
+          round: m.round_id,
+          status: m.status,
+          completed: m.status === 4
+        })));
+      });
+      
+      // Simplified completion logic: Tournament is complete when ALL groups have at least one completed match
+      // and the highest priority group (grand final = group 3) has a completed match
+      const grandFinalMatches = tournamentData.matches.filter((m: any) => m.group_id === 3);
+      const completedGrandFinalMatches = grandFinalMatches.filter((m: any) => m.status === 4);
+      
+      console.log('Grand final matches:', grandFinalMatches.length);
+      console.log('Completed grand final matches:', completedGrandFinalMatches.length);
+      
+      let tournamentComplete = false;
+      let winnerId = null;
+      
+      if (completedGrandFinalMatches.length > 0) {
+        // Check if there are any remaining matches that could still be played
+        const incompleteMatches = tournamentData.matches.filter((m: any) => 
+          m.status === 2 || // ready
+          (m.status === 0 && m.opponent1?.id && m.opponent2?.id) // waiting but has both opponents
+        );
+        
+        console.log('Incomplete matches that could still be played:', incompleteMatches);
+        
+        if (incompleteMatches.length === 0) {
+          // No more matches to play - tournament is complete
+          const lastCompletedGF = completedGrandFinalMatches.sort((a: any, b: any) => b.round_id - a.round_id)[0];
+          tournamentComplete = true;
+          winnerId = lastCompletedGF.opponent1?.result === 'win' 
+            ? lastCompletedGF.opponent1?.id 
+            : lastCompletedGF.opponent2?.id;
+          
+          console.log('🏆 Tournament complete! Winner:', winnerId);
+        } else {
+          console.log('Tournament not complete - there are still matches to play');
+        }
+      }
+      
+      if (tournamentComplete && winnerId && !showVictoryModal && !victoryShown) {
         const winner = tournamentData.participants.find((p: any) => p.id === winnerId);
         if (winner) {
+          console.log('🎉 TRIGGERING VICTORY CELEBRATION FOR:', winner.name);
           setTournamentWinner(winner.name);
           setShowVictoryModal(true);
           setVictoryShown(true);
@@ -259,7 +315,6 @@ export const TournamentView = () => {
           const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
           
           const frame = () => {
-            // Check if animation should stop
             if (!confettiAnimationRef.current) return;
             
             confetti({
@@ -285,6 +340,60 @@ export const TournamentView = () => {
           };
           
           confettiAnimationRef.current = requestAnimationFrame(frame);
+        }
+      }
+    } else {
+      // Single elimination logic (existing)
+      const maxRound = Math.max(...tournamentData.matches.map((m: any) => m.round_id));
+      const finalMatches = tournamentData.matches.filter((m: any) => m.round_id === maxRound);
+      
+      const completedFinalMatch = finalMatches.find((m: any) => m.status === 4);
+      
+      if (completedFinalMatch && !showVictoryModal && !victoryShown) {
+        const winnerId = completedFinalMatch.opponent1?.result === 'win' 
+          ? completedFinalMatch.opponent1?.id 
+          : completedFinalMatch.opponent2?.id;
+        
+        if (winnerId) {
+          const winner = tournamentData.participants.find((p: any) => p.id === winnerId);
+          if (winner) {
+            setTournamentWinner(winner.name);
+            setShowVictoryModal(true);
+            setVictoryShown(true);
+            
+            // Trigger confetti (same as above)
+            const duration = 3000;
+            const end = Date.now() + duration;
+            
+            const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+            
+            const frame = () => {
+              if (!confettiAnimationRef.current) return;
+              
+              confetti({
+                particleCount: 2,
+                angle: 60,
+                spread: 55,
+                origin: { x: 0 },
+                colors: colors
+              });
+              confetti({
+                particleCount: 2,
+                angle: 120,
+                spread: 55,
+                origin: { x: 1 },
+                colors: colors
+              });
+
+              if (Date.now() < end) {
+                confettiAnimationRef.current = requestAnimationFrame(frame);
+              } else {
+                confettiAnimationRef.current = null;
+              }
+            };
+            
+            confettiAnimationRef.current = requestAnimationFrame(frame);
+          }
         }
       }
     }
