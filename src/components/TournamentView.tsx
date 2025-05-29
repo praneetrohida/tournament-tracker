@@ -255,129 +255,179 @@ export const TournamentView = () => {
                 Click on a player's name to select them as the winner
               </span>
             </div>
-            <div className="space-y-2">
-              {tournamentData.matches.map((match: any) => {
-                // Convert numeric status to string
-                const getMatchStatus = (status: number) => {
-                  switch (status) {
-                    case 0: return 'waiting';
-                    case 1: return 'locked';
-                    case 2: return 'ready';
-                    case 3: return 'running';
-                    case 4: return 'completed';
-                    default: return 'unknown';
+            <div className="space-y-6">
+              {/* Group matches by round */}
+              {(() => {
+                // Group matches by round_id
+                const matchesByRound = tournamentData.matches.reduce((acc: any, match: any) => {
+                  const roundId = match.round_id;
+                  if (!acc[roundId]) {
+                    acc[roundId] = [];
                   }
-                };
+                  acc[roundId].push(match);
+                  return acc;
+                }, {});
 
-                // Get participant names by ID
-                const getParticipantName = (participantId: number | null) => {
-                  if (!participantId) return 'TBD';
-                  const participant = tournamentData.participants.find((p: any) => p.id === participantId);
-                  return participant?.name || `Player ${participantId}`;
-                };
+                // Convert to array and sort by round_id
+                const sortedRounds = Object.entries(matchesByRound)
+                  .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                  .map(([roundId, matches]: [string, any]) => ({
+                    roundId: parseInt(roundId),
+                    matches: matches.sort((a: any, b: any) => a.number - b.number)
+                  }));
 
-                const status = getMatchStatus(match.status);
-                const player1Name = getParticipantName(match.opponent1?.id);
-                const player2Name = getParticipantName(match.opponent2?.id);
+                return sortedRounds.map(({ roundId, matches }) => {
+                  // Get round name based on tournament structure
+                  const getRoundName = (round: number, totalRounds: number) => {
+                    if (totalRounds === 1) return 'Final';
+                    if (round === totalRounds) return 'Final';
+                    if (round === totalRounds - 1) return 'Semifinals';
+                    if (round === totalRounds - 2) return 'Quarterfinals';
+                    return `Round ${round}`;
+                  };
 
-                return (
-                  <div
-                    key={match.id}
-                    className={`p-3 border rounded-md transition-colors ${
-                      status === 'ready' 
-                        ? 'bg-green-50 border-green-200' 
-                        : status === 'completed'
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-gray-50 border-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <span className="text-sm font-medium">Match {match.number || match.id}</span>
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          status === 'ready' 
-                            ? 'bg-green-100 text-green-800 font-medium' 
-                            : status === 'completed'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-200 text-gray-600'
-                        }`}>
-                          {status === 'ready' ? '⚡ Ready to Play' : status === 'completed' ? '✅ Complete' : status}
+                  const totalRounds = sortedRounds.length;
+                  const roundName = getRoundName(roundId, totalRounds);
+
+                  return (
+                    <div key={roundId} className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-1 bg-primary rounded-full"></div>
+                        <h4 className="text-lg font-semibold text-primary">{roundName}</h4>
+                        <span className="text-sm text-muted-foreground">
+                          ({matches.length} match{matches.length !== 1 ? 'es' : ''})
                         </span>
+                      </div>
+                      
+                      <div className="space-y-2 ml-3">
+                        {matches.map((match: any) => {
+                          // Convert numeric status to string
+                          const getMatchStatus = (status: number) => {
+                            switch (status) {
+                              case 0: return 'waiting';
+                              case 1: return 'locked';
+                              case 2: return 'ready';
+                              case 3: return 'running';
+                              case 4: return 'completed';
+                              default: return 'unknown';
+                            }
+                          };
+
+                          // Get participant names by ID
+                          const getParticipantName = (participantId: number | null) => {
+                            if (!participantId) return 'TBD';
+                            const participant = tournamentData.participants.find((p: any) => p.id === participantId);
+                            return participant?.name || `Player ${participantId}`;
+                          };
+
+                          const status = getMatchStatus(match.status);
+                          const player1Name = getParticipantName(match.opponent1?.id);
+                          const player2Name = getParticipantName(match.opponent2?.id);
+
+                          return (
+                            <div
+                              key={match.id}
+                              className={`p-3 border rounded-md transition-colors ${
+                                status === 'ready' 
+                                  ? 'bg-green-50 border-green-200' 
+                                  : status === 'completed'
+                                  ? 'bg-blue-50 border-blue-200'
+                                  : 'bg-gray-50 border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                  <span className="text-sm font-medium">Match {match.number || match.id}</span>
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    status === 'ready' 
+                                      ? 'bg-green-100 text-green-800 font-medium' 
+                                      : status === 'completed'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-gray-200 text-gray-600'
+                                  }`}>
+                                    {status === 'ready' ? '⚡ Ready to Play' : status === 'completed' ? '✅ Complete' : status}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {status === 'ready' ? (
+                                <div className="mt-3 flex items-center justify-between">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      console.log('Manual winner selection - Player 1:', player1Name);
+                                      const fullMatch = {
+                                        ...match,
+                                        status,
+                                        opponent1: { 
+                                          ...match.opponent1,
+                                          participant: { name: player1Name }
+                                        },
+                                        opponent2: { 
+                                          ...match.opponent2,
+                                          participant: { name: player2Name }
+                                        }
+                                      };
+                                      handleSelectWinner(1, fullMatch);
+                                    }}
+                                    className="flex-1 mr-2 hover:bg-green-100 hover:border-green-300"
+                                  >
+                                    <Trophy className="h-3 w-3 mr-1" />
+                                    {player1Name}
+                                  </Button>
+                                  <span className="text-xs text-muted-foreground mx-2 font-medium">vs</span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      console.log('Manual winner selection - Player 2:', player2Name);
+                                      const fullMatch = {
+                                        ...match,
+                                        status,
+                                        opponent1: { 
+                                          ...match.opponent1,
+                                          participant: { name: player1Name }
+                                        },
+                                        opponent2: { 
+                                          ...match.opponent2,
+                                          participant: { name: player2Name }
+                                        }
+                                      };
+                                      handleSelectWinner(2, fullMatch);
+                                    }}
+                                    className="flex-1 ml-2 hover:bg-green-100 hover:border-green-300"
+                                  >
+                                    <Trophy className="h-3 w-3 mr-1" />
+                                    {player2Name}
+                                  </Button>
+                                </div>
+                              ) : status === 'completed' ? (
+                                <div className="mt-3 flex items-center justify-center text-blue-700 text-sm font-medium">
+                                  <span className={match.opponent1?.result === 'win' ? 'font-bold' : ''}>{player1Name}</span>
+                                  <span className="mx-2">vs</span>
+                                  <span className={match.opponent2?.result === 'win' ? 'font-bold' : ''}>{player2Name}</span>
+                                  <span className="ml-4 text-xs">
+                                    Winner: {match.opponent1?.result === 'win' ? player1Name : player2Name}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="mt-3 flex items-center justify-center text-muted-foreground text-sm">
+                                  <span>{player1Name}</span>
+                                  <span className="mx-2">vs</span>
+                                  <span>{player2Name}</span>
+                                  <span className="ml-4 text-xs">Waiting for previous matches</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                    
-                    {status === 'ready' ? (
-                      <div className="mt-3 flex items-center justify-between">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            console.log('Manual winner selection - Player 1:', player1Name);
-                            const fullMatch = {
-                              ...match,
-                              status,
-                              opponent1: { 
-                                ...match.opponent1,
-                                participant: { name: player1Name }
-                              },
-                              opponent2: { 
-                                ...match.opponent2,
-                                participant: { name: player2Name }
-                              }
-                            };
-                            handleSelectWinner(1, fullMatch);
-                          }}
-                          className="flex-1 mr-2 hover:bg-green-100 hover:border-green-300"
-                        >
-                          <Trophy className="h-3 w-3 mr-1" />
-                          {player1Name}
-                        </Button>
-                        <span className="text-xs text-muted-foreground mx-2 font-medium">vs</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            console.log('Manual winner selection - Player 2:', player2Name);
-                            const fullMatch = {
-                              ...match,
-                              status,
-                              opponent1: { 
-                                ...match.opponent1,
-                                participant: { name: player1Name }
-                              },
-                              opponent2: { 
-                                ...match.opponent2,
-                                participant: { name: player2Name }
-                              }
-                            };
-                            handleSelectWinner(2, fullMatch);
-                          }}
-                          className="flex-1 ml-2 hover:bg-green-100 hover:border-green-300"
-                        >
-                          <Trophy className="h-3 w-3 mr-1" />
-                          {player2Name}
-                        </Button>
-                      </div>
-                    ) : status === 'completed' ? (
-                      <div className="mt-3 flex items-center justify-center text-blue-700 text-sm font-medium">
-                        <span className={match.opponent1?.result === 'win' ? 'font-bold' : ''}>{player1Name}</span>
-                        <span className="mx-2">vs</span>
-                        <span className={match.opponent2?.result === 'win' ? 'font-bold' : ''}>{player2Name}</span>
-                        <span className="ml-4 text-xs">
-                          Winner: {match.opponent1?.result === 'win' ? player1Name : player2Name}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="mt-3 flex items-center justify-center text-muted-foreground text-sm">
-                        <span>{player1Name}</span>
-                        <span className="mx-2">vs</span>
-                        <span>{player2Name}</span>
-                        <span className="ml-4 text-xs">Waiting for previous matches</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
+              
               {tournamentData.matches.length === 0 && (
                 <p className="text-muted-foreground text-center py-4">
                   No matches found

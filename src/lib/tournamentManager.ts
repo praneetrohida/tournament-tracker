@@ -215,72 +215,106 @@ export class TournamentManager {
   private async advanceWinnerToNextRound(completedMatchId: number, winnerId: number | null) {
     if (!winnerId) return;
     
-    console.log('Attempting to advance winner to next round:', { completedMatchId, winnerId });
+    console.log('=== ADVANCING WINNER TO NEXT ROUND ===');
+    console.log('Completed match ID:', completedMatchId);
+    console.log('Winner ID:', winnerId);
     
-    // Get the completed match details
+    // Get all matches
     const allMatches = await this.storage.select('match');
     const completedMatch = allMatches.find((m: any) => m.id === completedMatchId);
     if (!completedMatch) {
-      console.log('Completed match not found');
+      console.log('❌ Completed match not found');
       return;
     }
     
-    console.log('Completed match details:', completedMatch);
+    console.log('✅ Completed match details:', completedMatch);
+    console.log('Match number:', completedMatch.number);
+    console.log('Round ID:', completedMatch.round_id);
     
-    // Find the next round that should receive this winner
-    // In a single elimination tournament, each match sends its winner to a specific next match
+    // Find ALL matches in the next round (both waiting and ready)
     const nextRoundId = completedMatch.round_id + 1;
-    const nextRoundMatches = allMatches.filter((match: any) => 
-      match.round_id === nextRoundId && match.status === 0 // waiting
+    console.log('Looking for next round ID:', nextRoundId);
+    
+    const allNextRoundMatches = allMatches.filter((match: any) => 
+      match.round_id === nextRoundId
     );
     
-    console.log('Next round matches:', nextRoundMatches);
+    console.log('All next round matches found:', allNextRoundMatches.length);
+    console.log('All next round matches:', allNextRoundMatches.map(m => ({ 
+      id: m.id, 
+      number: m.number, 
+      status: m.status,
+      opponent1: m.opponent1?.id || 'empty',
+      opponent2: m.opponent2?.id || 'empty'
+    })));
     
-    if (nextRoundMatches.length === 0) {
-      console.log('No next round matches found - tournament may be complete');
+    if (allNextRoundMatches.length === 0) {
+      console.log('⚠️ No next round matches found - tournament may be complete');
       return;
     }
     
-    // For single elimination, determine which next match should receive this winner
-    // This is based on the match number/position in the current round
-    const nextMatchIndex = Math.floor((completedMatch.number - 1) / 2);
-    const targetNextMatch = nextRoundMatches[nextMatchIndex];
+    // Sort by match number to ensure consistent order
+    const sortedNextRoundMatches = allNextRoundMatches.sort((a, b) => a.number - b.number);
     
-    if (!targetNextMatch) {
-      console.log('Target next match not found');
+    // For single elimination bracket logic:
+    // Round 1: Matches 1,2,3,4 -> Round 2: Matches 1,2 (Semi 1, Semi 2)
+    // Match 1 & 2 feed into Semi 1, Match 3 & 4 feed into Semi 2
+    const semiMatchIndex = Math.floor((completedMatch.number - 1) / 2);
+    
+    console.log(`Match ${completedMatch.number} should feed into semi match at index ${semiMatchIndex}`);
+    
+    if (semiMatchIndex >= sortedNextRoundMatches.length) {
+      console.log(`❌ Semi match index ${semiMatchIndex} is out of bounds for ${sortedNextRoundMatches.length} matches`);
       return;
     }
     
-    console.log('Target next match for winner:', targetNextMatch);
+    const targetSemiMatch = sortedNextRoundMatches[semiMatchIndex];
+    console.log('✅ Target semi match:', targetSemiMatch);
     
-    // Determine which position in the next match this winner should take
-    // Even numbered matches (0, 2, 4...) send winner to opponent1
-    // Odd numbered matches (1, 3, 5...) send winner to opponent2
-    const isEvenMatch = (completedMatch.number - 1) % 2 === 0;
-    const targetPosition = isEvenMatch ? 'opponent1' : 'opponent2';
+    // Determine which position (opponent1 or opponent2) this winner should take
+    // Within each pair: first match -> opponent1, second match -> opponent2
+    const isFirstInPair = (completedMatch.number - 1) % 2 === 0;
+    const targetPosition = isFirstInPair ? 'opponent1' : 'opponent2';
     
-    console.log(`Advancing winner ${winnerId} to ${targetPosition} of match ${targetNextMatch.id}`);
+    console.log(`📍 Match ${completedMatch.number} is ${isFirstInPair ? 'first' : 'second'} in pair`);
+    console.log(`🎯 Advancing winner ${winnerId} to ${targetPosition} of match ${targetSemiMatch.id}`);
     
-    // Update the next match with the winner
+    // Check if this position is already occupied
+    if (targetSemiMatch[targetPosition]?.id) {
+      console.log(`⚠️ Position ${targetPosition} already occupied by participant ${targetSemiMatch[targetPosition].id}`);
+      return;
+    }
+    
+    // Update the semi match with the winner
     const updateData: any = {};
     updateData[targetPosition] = {
-      ...targetNextMatch[targetPosition],
-      id: winnerId
+      id: winnerId,
+      position: null,
+      result: null,
+      score: null
     };
     
-    await this.storage.update('match', targetNextMatch.id, updateData);
+    console.log('Update data:', updateData);
     
-    // Check if the next match now has both opponents and can be set to ready
-    const updatedNextMatch = await this.storage.select('match', targetNextMatch.id);
-    if (updatedNextMatch && updatedNextMatch[0]) {
-      const match = updatedNextMatch[0];
+    const updateResult = await this.storage.update('match', targetSemiMatch.id, updateData);
+    console.log('✅ Storage update result:', updateResult);
+    
+    // Check the updated state
+    const updatedMatch = await this.storage.select('match', targetSemiMatch.id);
+    if (updatedMatch && updatedMatch[0]) {
+      const match = updatedMatch[0];
+      console.log('✅ Updated match state:', match);
+      
+      // If both opponents are now present, set to ready
       if (match.opponent1?.id && match.opponent2?.id && match.status === 0) {
-        console.log(`Setting match ${match.id} to ready status`);
+        console.log(`🚀 Setting match ${match.id} to ready status (both opponents present)`);
         await this.storage.update('match', match.id, { status: 2 }); // ready
+      } else {
+        console.log(`⏳ Match ${match.id} still waiting (opponent1: ${match.opponent1?.id}, opponent2: ${match.opponent2?.id}, status: ${match.status})`);
       }
     }
     
-    console.log('Winner advancement completed');
+    console.log('=== WINNER ADVANCEMENT COMPLETED ===');
   }
 
   async getMatches() {
