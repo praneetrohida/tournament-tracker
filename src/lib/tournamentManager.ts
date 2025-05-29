@@ -286,6 +286,10 @@ export class TournamentManager {
     }
     
     // Update the semi match with the winner
+    console.log('🔧 About to update target match:', targetSemiMatch.id);
+    console.log('🔧 Target position:', targetPosition);
+    console.log('🔧 Winner ID:', winnerId);
+    
     const updateData: any = {};
     updateData[targetPosition] = {
       id: winnerId,
@@ -294,7 +298,7 @@ export class TournamentManager {
       score: null
     };
     
-    console.log('Update data:', updateData);
+    console.log('🔧 Update data:', updateData);
     
     const updateResult = await this.storage.update('match', targetSemiMatch.id, updateData);
     console.log('✅ Storage update result:', updateResult);
@@ -304,6 +308,8 @@ export class TournamentManager {
     if (updatedMatch && updatedMatch[0]) {
       const match = updatedMatch[0];
       console.log('✅ Updated match state:', match);
+      console.log('🔍 Updated match opponent1:', match.opponent1);
+      console.log('🔍 Updated match opponent2:', match.opponent2);
       
       // If both opponents are now present, set to ready
       if (match.opponent1?.id && match.opponent2?.id && match.status === 0) {
@@ -315,6 +321,18 @@ export class TournamentManager {
     }
     
     console.log('=== WINNER ADVANCEMENT COMPLETED ===');
+    
+    // Debug: Print all matches after advancement
+    const allMatchesAfter = await this.storage.select('match');
+    console.log('🏆 ALL MATCHES AFTER ADVANCEMENT:');
+    allMatchesAfter.forEach((m: any) => {
+      console.log(`Match ${m.id} (Round ${m.round_id}):`, {
+        number: m.number,
+        status: m.status,
+        opponent1: m.opponent1,
+        opponent2: m.opponent2
+      });
+    });
   }
 
   async getMatches() {

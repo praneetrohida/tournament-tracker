@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { RotateCcw, Trophy } from 'lucide-react';
+import { RotateCcw, Trophy, Crown, X } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { 
   tournamentDataAtom, 
   updateMatchAtom, 
@@ -26,6 +27,10 @@ export const TournamentView = () => {
   const [selectedMatch, setSelectedMatch] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentMatch, setCurrentMatch] = useState<any>(null);
+  const [showVictoryModal, setShowVictoryModal] = useState(false);
+  const [tournamentWinner, setTournamentWinner] = useState<string | null>(null);
+  const [victoryShown, setVictoryShown] = useState(false); // Track if victory was already shown
+  const confettiAnimationRef = useRef<number | null>(null); // Track confetti animation
   
   const bracketRef = useRef<HTMLDivElement>(null);
 
@@ -99,16 +104,23 @@ export const TournamentView = () => {
           return tournamentData.participants.find((p: any) => p.id === opponentId);
         };
 
+        // Clean up null values for display
+        const cleanOpponent = (opponent: any) => {
+          if (!opponent) return opponent;
+          return {
+            ...opponent,
+            // Remove null position to prevent "#null" prefixes
+            position: opponent.position || undefined,
+            // Convert null scores to undefined for cleaner display
+            score: opponent.score === null ? undefined : opponent.score,
+            participant: opponent.id ? getParticipant(opponent.id) : null
+          };
+        };
+
         return {
           ...match,
-          opponent1: match.opponent1?.id ? {
-            ...match.opponent1,
-            participant: getParticipant(match.opponent1.id)
-          } : match.opponent1,
-          opponent2: match.opponent2?.id ? {
-            ...match.opponent2,
-            participant: getParticipant(match.opponent2.id)
-          } : match.opponent2,
+          opponent1: cleanOpponent(match.opponent1),
+          opponent2: cleanOpponent(match.opponent2),
         };
       });
 
@@ -196,6 +208,94 @@ export const TournamentView = () => {
       console.error('Failed to update match:', error);
     }
   };
+
+  const handleCloseVictoryModal = () => {
+    setShowVictoryModal(false);
+    // Don't reset victoryShown here to prevent re-triggering
+  };
+
+  const stopConfetti = () => {
+    if (confettiAnimationRef.current) {
+      cancelAnimationFrame(confettiAnimationRef.current);
+      confettiAnimationRef.current = null;
+    }
+  };
+
+  const handleNewTournament = async () => {
+    stopConfetti(); // Stop any running confetti
+    setShowVictoryModal(false);
+    setVictoryShown(false); // Reset for new tournament
+    await resetTournament();
+  };
+
+  // Detect tournament completion and trigger victory celebration
+  useEffect(() => {
+    if (!tournamentData?.matches) return;
+
+    // Find the final round (highest round_id)
+    const maxRound = Math.max(...tournamentData.matches.map((m: any) => m.round_id));
+    const finalMatches = tournamentData.matches.filter((m: any) => m.round_id === maxRound);
+    
+    // Check if any final match is completed
+    const completedFinalMatch = finalMatches.find((m: any) => m.status === 4);
+    
+    if (completedFinalMatch && !showVictoryModal && !victoryShown) {
+      // Determine the winner
+      const winnerId = completedFinalMatch.opponent1?.result === 'win' 
+        ? completedFinalMatch.opponent1?.id 
+        : completedFinalMatch.opponent2?.id;
+      
+      if (winnerId) {
+        const winner = tournamentData.participants.find((p: any) => p.id === winnerId);
+        if (winner) {
+          setTournamentWinner(winner.name);
+          setShowVictoryModal(true);
+          setVictoryShown(true);
+          
+          // Trigger confetti
+          const duration = 3000;
+          const end = Date.now() + duration;
+          
+          const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+          
+          const frame = () => {
+            // Check if animation should stop
+            if (!confettiAnimationRef.current) return;
+            
+            confetti({
+              particleCount: 2,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0 },
+              colors: colors
+            });
+            confetti({
+              particleCount: 2,
+              angle: 120,
+              spread: 55,
+              origin: { x: 1 },
+              colors: colors
+            });
+
+            if (Date.now() < end) {
+              confettiAnimationRef.current = requestAnimationFrame(frame);
+            } else {
+              confettiAnimationRef.current = null;
+            }
+          };
+          
+          confettiAnimationRef.current = requestAnimationFrame(frame);
+        }
+      }
+    }
+  }, [tournamentData, showVictoryModal, victoryShown]);
+
+  // Cleanup confetti animation on unmount
+  useEffect(() => {
+    return () => {
+      stopConfetti();
+    };
+  }, []);
 
   if (!tournamentData || !tournamentData.matches || tournamentData.matches.length === 0) {
     return (
@@ -491,6 +591,59 @@ export const TournamentView = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Victory Celebration Modal */}
+      <Dialog open={showVictoryModal} onOpenChange={handleCloseVictoryModal}>
+        <DialogContent className="sm:max-w-md w-full mx-auto">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 z-10"
+            onClick={handleCloseVictoryModal}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+          <div className="text-center">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-center gap-2 text-2xl text-yellow-600 mb-4">
+                <Crown className="h-8 w-8" />
+                Tournament Champion!
+                <Crown className="h-8 w-8" />
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6 py-4">
+              <div className="text-6xl">🏆</div>
+              <div className="space-y-2">
+                <p className="text-xl font-bold text-primary">
+                  Congratulations!
+                </p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {tournamentWinner}
+                </p>
+                <p className="text-lg text-muted-foreground">
+                  You are the tournament champion!
+                </p>
+              </div>
+              <div className="flex gap-2 justify-center">
+                <Button
+                  onClick={handleCloseVictoryModal}
+                  variant="outline"
+                >
+                  Continue
+                </Button>
+                <Button
+                  onClick={handleNewTournament}
+                  className="bg-yellow-600 hover:bg-yellow-700"
+                >
+                  <Crown className="h-4 w-4 mr-2" />
+                  New Tournament
+                </Button>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

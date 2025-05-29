@@ -28,16 +28,28 @@ export const isSetupCompleteAtom = atom(
 // Actions
 export const createTournamentAtom = atom(
   null,
-  async (get, set) => {
-    const players = get(playersAtom);
+  async (get, set, randomizePlayers: boolean = false) => {
+    const originalPlayers = get(playersAtom);
     const settings = get(tournamentSettingsAtom);
     
-    if (players.length < 2) {
+    if (originalPlayers.length < 2) {
       throw new Error('Need at least 2 players to create a tournament');
     }
 
     try {
-      await tournamentManager.createTournament(players, settings);
+      // Create a copy of players and optionally randomize
+      const playersToUse = [...originalPlayers];
+      
+      if (randomizePlayers) {
+        // Fisher-Yates shuffle algorithm - only for tournament creation
+        for (let i = playersToUse.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [playersToUse[i], playersToUse[j]] = [playersToUse[j], playersToUse[i]];
+        }
+        console.log('Players randomized for tournament:', playersToUse.map(p => p.name));
+      }
+
+      await tournamentManager.createTournament(playersToUse, settings);
       set(tournamentCreatedAtom, true);
       
       // Get initial tournament data

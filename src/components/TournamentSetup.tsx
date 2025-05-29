@@ -1,14 +1,16 @@
 import { useAtom } from 'jotai';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   playersAtom, 
   tournamentSettingsAtom, 
   createTournamentAtom, 
-  tournamentCreatedAtom 
+  tournamentCreatedAtom
 } from '@/lib/store';
 import type { TournamentSettings } from '@/lib/tournamentManager';
 
@@ -17,10 +19,11 @@ export const TournamentSetup = () => {
   const [settings, setSettings] = useAtom(tournamentSettingsAtom);
   const [, createTournament] = useAtom(createTournamentAtom);
   const [tournamentCreated] = useAtom(tournamentCreatedAtom);
+  const [randomizeOnCreate, setRandomizeOnCreate] = useState(false);
 
   const handleCreateTournament = async () => {
     try {
-      await createTournament();
+      await createTournament(randomizeOnCreate);
     } catch (error) {
       console.error('Failed to create tournament:', error);
     }
@@ -77,6 +80,25 @@ export const TournamentSetup = () => {
               <SelectItem value="doubles">Doubles</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-3">
+          <Label className="text-sm font-medium">Player Order</Label>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="randomize"
+                checked={randomizeOnCreate}
+                onCheckedChange={(value) => setRandomizeOnCreate(value === true)}
+              />
+              <Label htmlFor="randomize" className="text-sm">
+                Randomize players when creating tournament
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Randomize player seeding for fair bracket placement
+            </p>
+          </div>
         </div>
 
         <div className="pt-4 border-t">
