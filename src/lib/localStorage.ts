@@ -23,12 +23,23 @@ export class LocalStorage {
     localStorage.setItem(this.storageKey, JSON.stringify(data));
   }
 
-  async insert(table: string, value: any): Promise<number> {
+  async insert(table: string, value: any): Promise<any> {
     const data = this.getData();
     if (!data[table]) {
       data[table] = [];
     }
-    
+
+    // Handle bulk insert (array of values) — returns boolean
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const id = data[table].length > 0 ? Math.max(...data[table].map((i: any) => i.id || 0)) + 1 : 1;
+        data[table].push({ ...item, id });
+      }
+      this.saveData(data);
+      return true;
+    }
+
+    // Single insert — returns the new ID
     const id = data[table].length > 0 ? Math.max(...data[table].map((item: any) => item.id || 0)) + 1 : 1;
     const newItem = { ...value, id };
     data[table].push(newItem);
@@ -36,33 +47,34 @@ export class LocalStorage {
     return id;
   }
 
-  async select(table: string, filter?: any): Promise<any[]> {
+  async select(table: string, filter?: any): Promise<any> {
     const data = this.getData();
     if (!data[table]) {
-      return [];
+      return null;
     }
 
     let results = data[table];
-    
-    if (filter) {
+
+    if (filter !== undefined && filter !== null) {
       // Handle both object filters and ID filters
-      if (typeof filter === 'object' && filter !== null) {
+      if (typeof filter === 'object') {
         results = results.filter((item: any) => {
-          return Object.keys(filter).every(key => {
+          return Object.keys(filter).every((key: string) => {
             if (filter[key] === null) {
               return item[key] === null || item[key] === undefined;
             }
             return item[key] === filter[key];
           });
         });
+        return results.length > 0 ? results : null;
       } else {
-        // Handle ID filter
+        // ID filter — return single object or null (per CrudInterface contract)
         const item = results.find((item: any) => item.id === filter);
-        return item ? [item] : [];
+        return item || null;
       }
     }
 
-    return results;
+    return results.length > 0 ? results : null;
   }
 
   async update(table: string, filter: any, value: any): Promise<boolean> {
@@ -107,16 +119,16 @@ export class LocalStorage {
   async delete(table: string, filter?: any): Promise<boolean> {
     const data = this.getData();
     if (!data[table]) {
-      return false;
+      data[table] = [];
+      this.saveData(data);
+      return true; // Emptying a non-existent table is still successful
     }
 
-    const originalLength = data[table].length;
-    
     if (filter) {
+      const originalLength = data[table].length;
       if (typeof filter === 'object' && filter !== null) {
-        // Handle object filter
         data[table] = data[table].filter((item: any) => {
-          return !Object.keys(filter).every(key => {
+          return !Object.keys(filter).every((key: string) => {
             if (filter[key] === null) {
               return item[key] === null || item[key] === undefined;
             }
@@ -124,15 +136,15 @@ export class LocalStorage {
           });
         });
       } else {
-        // Handle ID filter
         data[table] = data[table].filter((item: any) => item.id !== filter);
       }
+      this.saveData(data);
+      return data[table].length < originalLength;
     } else {
       data[table] = [];
+      this.saveData(data);
+      return true;
     }
-
-    this.saveData(data);
-    return data[table].length < originalLength;
   }
 
   // Clear all tournament data
