@@ -282,7 +282,7 @@ export function SetupScreen() {
             </span>
           </div>
           <div className="space-y-4">
-            {players.map((player) => (
+            {[...players].sort((a, b) => (allStats[b.name]?.totalPoints ?? 0) - (allStats[a.name]?.totalPoints ?? 0)).map((player) => (
               <SwipeablePlayerRow
                 key={player.id}
                 player={player}
@@ -297,16 +297,17 @@ export function SetupScreen() {
       )}
 
       {/* Fixed Bottom CTA */}
-      <div className="fixed bottom-10 left-0 w-full px-6 z-40 pointer-events-none">
-        <button
-          disabled={includedPlayers.length < 2 || tournamentCreated}
-          onClick={handleCreateTournament}
-          className="pointer-events-auto w-full kinetic-gradient text-on-primary py-6 rounded-full font-extrabold text-lg uppercase tracking-widest kinetic-shadow-strong flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <span>Start Tournament</span>
-          <span className="material-symbols-outlined font-extrabold">bolt</span>
-        </button>
-      </div>
+      {includedPlayers.length >= 2 && !tournamentCreated && (
+        <div className="fixed bottom-10 left-0 w-full px-6 z-40 pointer-events-none">
+          <button
+            onClick={handleCreateTournament}
+            className="pointer-events-auto w-full kinetic-gradient text-on-primary py-6 rounded-full font-extrabold text-lg uppercase tracking-widest kinetic-shadow-strong flex items-center justify-center gap-3 active:scale-95 transition-all"
+          >
+            <span>Start Tournament</span>
+            <span className="material-symbols-outlined font-extrabold">bolt</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

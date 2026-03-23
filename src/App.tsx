@@ -12,8 +12,8 @@ function App() {
   return (
     <div className="min-h-screen bg-surface text-on-surface font-body">
       {/* Glassmorphic Fixed Header */}
-      <header className="fixed top-0 w-full z-50 bg-[#180429]/60 backdrop-blur-xl shadow-[0_20px_50px_rgba(189,157,255,0.08)]">
-        <div className="h-20 max-w-5xl mx-auto flex items-center justify-between px-6">
+      <header className="fixed top-0 w-full z-50 bg-[#180429]/60 backdrop-blur-xl shadow-[0_20px_50px_rgba(189,157,255,0.08)]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="h-16 max-w-5xl mx-auto flex items-center justify-between px-6">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#bd9dff]">sports_tennis</span>
             <span className="font-extrabold italic tracking-tighter text-[#bd9dff] uppercase text-xl">
