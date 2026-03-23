@@ -78,17 +78,17 @@ export class TournamentManager {
       console.log('Created stage:', stage);
       
       // Debug: Check what matches were created
-      const matches = await this.storage.select('match');
+      const matches = await this.storage.select('match') || [];
       console.log('Matches after creation:', matches);
 
       // Debug: Show bracket structure
       console.log('=== BRACKET STRUCTURE ===');
       const groups = await this.storage.select('group');
       console.log('Groups:', groups);
-      
+
       const rounds = await this.storage.select('round');
       console.log('Rounds:', rounds);
-      
+
       // Organize matches by group and round for clarity
       const matchesByGroup = matches.reduce((acc: any, match: any) => {
         if (!acc[match.group_id]) acc[match.group_id] = {};
@@ -166,13 +166,11 @@ export class TournamentManager {
       // Get current match data
       const currentMatch = await this.storage.select('match', matchId);
 
-      if (!currentMatch || currentMatch.length === 0) {
+      if (!currentMatch) {
         throw new Error(`Match with ID ${matchId} not found`);
       }
 
-      const match = currentMatch[0];
-
-      if (match.status === 4) {
+      if (currentMatch.status === 4) {
         throw new Error('Cannot update a completed match');
       }
 
@@ -201,7 +199,7 @@ export class TournamentManager {
   async getMatches() {
     try {
       const matches = await this.storage.select('match');
-      return matches;
+      return matches || [];
     } catch (error) {
       console.error('Error getting matches:', error);
       return [];
@@ -211,7 +209,7 @@ export class TournamentManager {
   async getParticipants() {
     try {
       const participants = await this.storage.select('participant');
-      return participants;
+      return participants || [];
     } catch (error) {
       console.error('Error getting participants:', error);
       return [];
