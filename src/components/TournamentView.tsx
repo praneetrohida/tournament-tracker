@@ -262,14 +262,14 @@ export const TournamentView = () => {
           id: m.id,
           round: m.round_id,
           status: m.status,
-          completed: m.status === 4
+          completed: m.status === 4 || m.status === 5
         })));
       });
       
       // Simplified completion logic: Tournament is complete when ALL groups have at least one completed match
       // and the highest priority group (grand final = group 3) has a completed match
       const grandFinalMatches = tournamentData.matches.filter((m: any) => m.group_id === 3);
-      const completedGrandFinalMatches = grandFinalMatches.filter((m: any) => m.status === 4);
+      const completedGrandFinalMatches = grandFinalMatches.filter((m: any) => m.status === 4 || m.status === 5);
       
       console.log('Grand final matches:', grandFinalMatches.length);
       console.log('Completed grand final matches:', completedGrandFinalMatches.length);
@@ -347,7 +347,7 @@ export const TournamentView = () => {
       const maxRound = Math.max(...tournamentData.matches.map((m: any) => m.round_id));
       const finalMatches = tournamentData.matches.filter((m: any) => m.round_id === maxRound);
       
-      const completedFinalMatch = finalMatches.find((m: any) => m.status === 4);
+      const completedFinalMatch = finalMatches.find((m: any) => m.status === 4 || m.status === 5);
       
       if (completedFinalMatch && !showVictoryModal && !victoryShown) {
         const winnerId = completedFinalMatch.opponent1?.result === 'win' 
@@ -518,6 +518,7 @@ export const TournamentView = () => {
                               case 2: return 'ready';
                               case 3: return 'running';
                               case 4: return 'completed';
+                              case 5: return 'completed'; // archived — treat as completed
                               default: return 'unknown';
                             }
                           };
