@@ -17,7 +17,7 @@ function App() {
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#bd9dff]">sports_tennis</span>
             <span className="font-extrabold italic tracking-tighter text-[#bd9dff] uppercase text-xl">
-              SmashStats
+              Lets Play
             </span>
           </div>
           <div>

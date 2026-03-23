@@ -32,37 +32,31 @@ export const TournamentView = () => {
     refreshTournamentData();
   }, [refreshTournamentData]);
 
-  // Victory detection
+  // Victory detection — check if any real matches remain to be played
   useEffect(() => {
     if (!tournamentData?.matches) return;
 
-    const stage = tournamentData.stages?.[0];
-    const isDoubleElimination = stage?.type === 'double_elimination';
+    const allMatches = tournamentData.matches;
 
-    if (isDoubleElimination) {
-      const grandFinalMatches = tournamentData.matches.filter((m: any) => m.group_id === 3);
-      const completedGrandFinalMatches = grandFinalMatches.filter((m: any) => m.status === 4);
+    // A match is "real" if both opponents are non-null (not a BYE)
+    const realMatches = allMatches.filter(
+      (m: any) => m.opponent1 !== null && m.opponent2 !== null
+    );
 
-      if (completedGrandFinalMatches.length > 0) {
-        const incompleteMatches = tournamentData.matches.filter(
-          (m: any) =>
-            m.status === 2 ||
-            (m.status === 0 && m.opponent1?.id && m.opponent2?.id)
-        );
+    // At least one real match must be completed for a tournament to be over
+    // Status 4 = completed, status 5 = archived (also completed)
+    const hasCompletedReal = realMatches.some((m: any) => m.status >= 4);
+    if (!hasCompletedReal) return;
 
-        if (incompleteMatches.length === 0) {
-          setAppView('podium');
-        }
-      }
-    } else {
-      // Single elimination
-      const maxRound = Math.max(...tournamentData.matches.map((m: any) => m.round_id));
-      const finalMatches = tournamentData.matches.filter((m: any) => m.round_id === maxRound);
-      const completedFinalMatch = finalMatches.find((m: any) => m.status === 4);
+    // Check if there are any matches still playable
+    const hasPlayableMatches = allMatches.some(
+      (m: any) =>
+        m.status === 2 || // ready
+        (m.status === 0 && m.opponent1?.id && m.opponent2?.id) // waiting but both present
+    );
 
-      if (completedFinalMatch) {
-        setAppView('podium');
-      }
+    if (!hasPlayableMatches) {
+      setAppView('podium');
     }
   }, [tournamentData, setAppView]);
 
@@ -87,12 +81,17 @@ export const TournamentView = () => {
   const participants = tournamentData.participants || [];
   const matches: any[] = tournamentData.matches || [];
 
-  const readyMatches = matches.filter((m: any) => m.status === 2);
-  const waitingMatches = matches.filter((m: any) => m.status === 0 || m.status === 1);
-  const completedMatches = matches.filter((m: any) => m.status === 4);
-  const upcomingMatches = [...readyMatches, ...waitingMatches];
-
   const getName = (id: number | null) => getParticipantName(tournamentData, id);
+
+  // Filter out BYE matches (opponent is literally null)
+  const visibleMatches = matches.filter(
+    (m: any) => m.opponent1 !== null && m.opponent2 !== null
+  );
+
+  const readyMatches = visibleMatches.filter((m: any) => m.status === 2);
+  const waitingMatches = visibleMatches.filter((m: any) => m.status === 0 || m.status === 1);
+  const completedMatches = visibleMatches.filter((m: any) => m.status >= 4);
+  const upcomingMatches = [...readyMatches, ...waitingMatches];
 
   const renderPlayerAvatar = (
     name: string,
@@ -155,7 +154,7 @@ export const TournamentView = () => {
         </p>
       </section>
 
-      {/* Upcoming / Ready Matches */}
+      {/* Upcoming Matches */}
       {upcomingMatches.length > 0 && (
         <section className="mb-8">
           <h3 className="text-lg font-bold flex items-center gap-2">
@@ -174,25 +173,18 @@ export const TournamentView = () => {
                   className="bg-surface-container-low rounded-xl p-5 hover:bg-surface-container transition-all group border border-white/5"
                 >
                   <div className="flex items-center justify-between">
-                    {/* Left player */}
                     <div className="flex items-center gap-3 flex-1">
                       {renderPlayerAvatar(p1Name)}
                       <p className="text-sm font-bold">{p1Name}</p>
                     </div>
-
-                    {/* VS */}
                     <div className="px-4">
                       <span className="text-xs font-black italic text-primary/40">VS</span>
                     </div>
-
-                    {/* Right player */}
                     <div className="flex items-center gap-3 flex-1 justify-end">
                       <p className="text-sm font-bold text-right">{p2Name}</p>
                       {renderPlayerAvatar(p2Name)}
                     </div>
                   </div>
-
-                  {/* Play Now button for ready matches */}
                   {isReady && (
                     <button
                       onClick={() => startScoring(match)}
@@ -231,17 +223,10 @@ export const TournamentView = () => {
                   className="bg-surface-container-lowest border border-white/5 rounded-xl p-5 opacity-60 relative overflow-hidden"
                 >
                   <div className="flex items-center justify-between">
-                    {/* Left player */}
                     <div className="flex items-center gap-3 flex-1">
                       {renderPlayerAvatar(p1Name, '', p1Won, !p1Won)}
                       <div>
-                        <p
-                          className={
-                            p1Won
-                              ? 'text-sm font-bold text-primary'
-                              : 'text-sm font-bold line-through text-on-surface-variant'
-                          }
-                        >
+                        <p className={p1Won ? 'text-sm font-bold text-primary' : 'text-sm font-bold line-through text-on-surface-variant'}>
                           {p1Name}
                         </p>
                         <p className="text-[10px] uppercase tracking-wider text-on-surface-variant">
@@ -249,24 +234,14 @@ export const TournamentView = () => {
                         </p>
                       </div>
                     </div>
-
-                    {/* Score */}
                     <div className="px-4">
                       <span className="text-[10px] font-bold text-on-surface-variant">
                         {score1} - {score2}
                       </span>
                     </div>
-
-                    {/* Right player */}
                     <div className="flex items-center gap-3 flex-1 justify-end">
                       <div className="text-right">
-                        <p
-                          className={
-                            p2Won
-                              ? 'text-sm font-bold text-primary'
-                              : 'text-sm font-bold line-through text-on-surface-variant'
-                          }
-                        >
+                        <p className={p2Won ? 'text-sm font-bold text-primary' : 'text-sm font-bold line-through text-on-surface-variant'}>
                           {p2Name}
                         </p>
                         <p className="text-[10px] uppercase tracking-wider text-on-surface-variant">

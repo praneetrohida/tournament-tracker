@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import {
   playersAtom,
@@ -8,6 +8,93 @@ import {
 } from '@/lib/store';
 import type { TournamentPlayer } from '@/lib/tournamentManager';
 
+function SwipeablePlayerRow({
+  player,
+  excluded,
+  onToggleExclude,
+  onRemove,
+}: {
+  player: TournamentPlayer;
+  excluded: boolean;
+  onToggleExclude: () => void;
+  onRemove: () => void;
+}) {
+  const [offsetX, setOffsetX] = useState(0);
+  const startX = useRef(0);
+  const swiping = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    swiping.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!swiping.current) return;
+    const diff = e.touches[0].clientX - startX.current;
+    // Only allow swiping left
+    setOffsetX(Math.min(0, diff));
+  };
+
+  const handleTouchEnd = () => {
+    swiping.current = false;
+    if (offsetX < -80) {
+      // Snap to reveal delete
+      setOffsetX(-80);
+    } else {
+      setOffsetX(0);
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-full">
+      {/* Delete button behind */}
+      <button
+        onClick={onRemove}
+        className="absolute right-0 top-0 bottom-0 w-20 bg-error flex items-center justify-center rounded-r-full"
+      >
+        <span className="material-symbols-outlined text-on-error">delete</span>
+      </button>
+
+      {/* Foreground row */}
+      <div
+        className="relative bg-surface-container p-5 rounded-full flex items-center gap-4 pl-5 pr-6 transition-transform"
+        style={{
+          transform: `translateX(${offsetX}px)`,
+          transition: swiping.current ? 'none' : 'transform 0.2s ease-out',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Checkbox */}
+        <button
+          onClick={onToggleExclude}
+          className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+            excluded
+              ? 'border-white/20 bg-transparent'
+              : 'border-secondary bg-secondary'
+          }`}
+        >
+          {!excluded && (
+            <span className="material-symbols-outlined text-on-secondary text-base">check</span>
+          )}
+        </button>
+
+        <div className={`w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden shrink-0 transition-opacity ${excluded ? 'opacity-30' : ''}`}>
+          <img
+            src={`https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(player.name)}`}
+            alt={player.name}
+            className="w-full h-full"
+          />
+        </div>
+        <div className={`font-bold text-lg leading-none flex-1 transition-opacity ${excluded ? 'opacity-30 line-through' : ''}`}>
+          {player.name}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SetupScreen() {
   const [players, setPlayers] = useAtom(playersAtom);
   const [settings, setSettings] = useAtom(tournamentSettingsAtom);
@@ -15,6 +102,7 @@ export function SetupScreen() {
   const createTournament = useSetAtom(createTournamentAtom);
 
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
 
   const addPlayer = () => {
     const name = newPlayerName.trim();
@@ -29,9 +117,30 @@ export function SetupScreen() {
 
   const removePlayer = (id: string) => {
     setPlayers(players.filter((p) => p.id !== id));
+    setExcludedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
+  const toggleExclude = (id: string) => {
+    setExcludedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const includedPlayers = players.filter((p) => !excludedIds.has(p.id));
+
   const handleCreateTournament = () => {
+    // Temporarily set players to only included ones for tournament creation
+    setPlayers(includedPlayers);
     createTournament(true);
   };
 
@@ -165,28 +274,18 @@ export function SetupScreen() {
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-2xl font-bold">Active Roster</h3>
             <span className="bg-surface-container-highest text-tertiary-fixed font-bold px-4 py-1 rounded-full text-xs">
-              {players.length} PLAYERS
+              {includedPlayers.length} / {players.length} PLAYERS
             </span>
           </div>
           <div className="space-y-4">
-            {players.map((player, index) => (
-              <div
+            {players.map((player) => (
+              <SwipeablePlayerRow
                 key={player.id}
-                className="bg-surface-container p-5 rounded-full flex items-center gap-4 group pl-5 pr-6"
-              >
-                <div className="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden shrink-0">
-                  <img src={`https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(player.name)}`} alt={player.name} className="w-full h-full" />
-                </div>
-                <div className="font-bold text-lg leading-none flex-1">
-                  {player.name}
-                </div>
-                <button
-                  onClick={() => removePlayer(player.id)}
-                  className="opacity-30 group-hover:opacity-100 transition-opacity hover:text-error active:scale-95"
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
+                player={player}
+                excluded={excludedIds.has(player.id)}
+                onToggleExclude={() => toggleExclude(player.id)}
+                onRemove={() => removePlayer(player.id)}
+              />
             ))}
           </div>
         </div>
@@ -195,7 +294,7 @@ export function SetupScreen() {
       {/* Fixed Bottom CTA */}
       <div className="fixed bottom-10 left-0 w-full px-6 z-40 pointer-events-none">
         <button
-          disabled={players.length < 2 || tournamentCreated}
+          disabled={includedPlayers.length < 2 || tournamentCreated}
           onClick={handleCreateTournament}
           className="pointer-events-auto w-full kinetic-gradient text-on-primary py-6 rounded-full font-extrabold text-lg uppercase tracking-widest kinetic-shadow-strong flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >

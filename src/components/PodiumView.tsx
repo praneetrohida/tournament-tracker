@@ -28,7 +28,7 @@ export function PodiumView() {
     // Build a win count map: participant id -> number of match wins
     const counts = new Map<number, number>();
     for (const match of matches) {
-      if (match.status !== 4) continue;
+      if (match.status < 4) continue;
       if (match.opponent1?.result === 'win' && match.opponent1?.id != null) {
         counts.set(match.opponent1.id, (counts.get(match.opponent1.id) || 0) + 1);
       }
@@ -49,19 +49,19 @@ export function PodiumView() {
     if (isDouble) {
       // Grand final matches have group_id === 3
       const grandFinalMatches = matches
-        .filter((m: { group_id: number; status: number }) => m.group_id === 3 && m.status === 4)
+        .filter((m: { group_id: number; status: number }) => m.group_id === 3 && m.status >= 4)
         .sort((a: { round_id: number }, b: { round_id: number }) => b.round_id - a.round_id);
       finalMatch = grandFinalMatches[0] ?? null;
 
       // 3rd place: loser of losers bracket final (highest round in group_id 2)
       const losersBracketMatches = matches
-        .filter((m: { group_id: number; status: number }) => m.group_id === 2 && m.status === 4)
+        .filter((m: { group_id: number; status: number }) => m.group_id === 2 && m.status >= 4)
         .sort((a: { round_id: number }, b: { round_id: number }) => b.round_id - a.round_id);
       semiFinalMatches = losersBracketMatches.length > 0 ? [losersBracketMatches[0]] : [];
     } else {
       // Single elimination: find match with highest round_id that is completed
       const completedMatches = matches
-        .filter((m: { status: number }) => m.status === 4)
+        .filter((m: { status: number }) => m.status >= 4)
         .sort((a: { round_id: number }, b: { round_id: number }) => b.round_id - a.round_id);
       finalMatch = completedMatches[0] ?? null;
 
@@ -69,7 +69,7 @@ export function PodiumView() {
       if (finalMatch) {
         semiFinalMatches = matches.filter(
           (m: { round_id: number; status: number }) =>
-            m.round_id === finalMatch!.round_id - 1 && m.status === 4
+            m.round_id === finalMatch!.round_id - 1 && m.status >= 4
         );
       }
     }
@@ -271,12 +271,6 @@ export function PodiumView() {
         >
           <span className="material-symbols-outlined text-xl">refresh</span>
           Start New Tournament
-        </button>
-        <button
-          onClick={() => setAppView('bracket')}
-          className="w-full py-4 rounded-full border border-white/10 text-white/70 font-bold text-sm uppercase tracking-widest hover:bg-white/5 transition-colors active:scale-95"
-        >
-          View All Bracket Results
         </button>
       </section>
     </div>
