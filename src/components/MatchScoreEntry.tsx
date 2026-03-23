@@ -207,11 +207,11 @@ export const MatchScoreEntry = () => {
       </div>
 
       {/* 4. Fixed Bottom Action Bar */}
-      <div className="fixed bottom-0 w-full z-50 p-6 bg-gradient-to-t from-[#180429] via-[#180429]/95 to-transparent">
+      <div className="fixed bottom-10 left-0 w-full px-6 z-40 pointer-events-none">
         <button
           disabled={!scores.selectedWinner}
           onClick={handleConfirm}
-          className="w-full bg-primary hover:bg-primary-dim text-on-primary-fixed font-extrabold py-4 rounded-full text-base uppercase tracking-widest shadow-[0_15px_30px_rgba(189,157,255,0.2)] flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+          className="pointer-events-auto w-full kinetic-gradient text-on-primary py-6 rounded-full font-extrabold text-lg uppercase tracking-widest kinetic-shadow-strong flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Confirm Result
           <span className="material-symbols-outlined font-bold text-lg">arrow_forward</span>
