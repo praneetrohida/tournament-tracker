@@ -2,20 +2,25 @@ import { useState, useRef } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import {
   playersAtom,
+  excludedPlayerIdsAtom,
+  playerStatsAtom,
   tournamentSettingsAtom,
   createTournamentAtom,
   tournamentCreatedAtom,
+  type PlayerStats,
 } from '@/lib/store';
 import type { TournamentPlayer } from '@/lib/tournamentManager';
 
 function SwipeablePlayerRow({
   player,
   excluded,
+  stats,
   onToggleExclude,
   onRemove,
 }: {
   player: TournamentPlayer;
   excluded: boolean;
+  stats?: PlayerStats;
   onToggleExclude: () => void;
   onRemove: () => void;
 }) {
@@ -87,8 +92,15 @@ function SwipeablePlayerRow({
             className="w-full h-full"
           />
         </div>
-        <div className={`font-bold text-lg leading-none flex-1 transition-opacity ${excluded ? 'opacity-30 line-through' : ''}`}>
-          {player.name}
+        <div className={`flex-1 transition-opacity ${excluded ? 'opacity-30' : ''}`}>
+          <div className={`font-bold text-lg leading-none ${excluded ? 'line-through' : ''}`}>
+            {player.name}
+          </div>
+          {stats && (stats.wins > 0 || stats.totalPoints > 0) && (
+            <div className="text-secondary text-[10px] uppercase tracking-widest font-bold mt-1">
+              {stats.wins}W · {stats.totalPoints}PTS
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -102,7 +114,9 @@ export function SetupScreen() {
   const createTournament = useSetAtom(createTournamentAtom);
 
   const [newPlayerName, setNewPlayerName] = useState('');
-  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
+  const [excludedIdsArr, setExcludedIdsArr] = useAtom(excludedPlayerIdsAtom);
+  const [allStats] = useAtom(playerStatsAtom);
+  const excludedIds = new Set(excludedIdsArr);
 
   const addPlayer = () => {
     const name = newPlayerName.trim();
@@ -117,31 +131,21 @@ export function SetupScreen() {
 
   const removePlayer = (id: string) => {
     setPlayers(players.filter((p) => p.id !== id));
-    setExcludedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    setExcludedIdsArr(excludedIdsArr.filter((eid) => eid !== id));
   };
 
   const toggleExclude = (id: string) => {
-    setExcludedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    if (excludedIds.has(id)) {
+      setExcludedIdsArr(excludedIdsArr.filter((eid) => eid !== id));
+    } else {
+      setExcludedIdsArr([...excludedIdsArr, id]);
+    }
   };
 
   const includedPlayers = players.filter((p) => !excludedIds.has(p.id));
 
   const handleCreateTournament = () => {
-    // Temporarily set players to only included ones for tournament creation
-    setPlayers(includedPlayers);
-    createTournament(true);
+    createTournament(includedPlayers);
   };
 
   return (
@@ -283,6 +287,7 @@ export function SetupScreen() {
                 key={player.id}
                 player={player}
                 excluded={excludedIds.has(player.id)}
+                stats={allStats[player.name]}
                 onToggleExclude={() => toggleExclude(player.id)}
                 onRemove={() => removePlayer(player.id)}
               />

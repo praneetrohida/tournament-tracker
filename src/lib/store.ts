@@ -8,6 +8,14 @@ const tournamentManager = new TournamentManager();
 
 // Basic tournament settings
 export const playersAtom = atomWithStorage<TournamentPlayer[]>('tournament-players', []);
+export const excludedPlayerIdsAtom = atomWithStorage<string[]>('excluded-player-ids', []);
+
+// Player lifetime stats keyed by player name
+export interface PlayerStats {
+  wins: number;
+  totalPoints: number;
+}
+export const playerStatsAtom = atomWithStorage<Record<string, PlayerStats>>('player-stats', {});
 export const tournamentSettingsAtom = atomWithStorage<TournamentSettings>('tournament-settings', {
   type: 'single_elimination',
   gameType: 'singles',
@@ -48,8 +56,8 @@ export const isSetupCompleteAtom = atom(
 // Actions
 export const createTournamentAtom = atom(
   null,
-  async (get, set, randomizePlayers: boolean = false) => {
-    const originalPlayers = get(playersAtom);
+  async (get, set, players?: TournamentPlayer[]) => {
+    const originalPlayers = players ?? get(playersAtom);
     const settings = get(tournamentSettingsAtom);
 
     if (originalPlayers.length < 2) {
@@ -59,12 +67,10 @@ export const createTournamentAtom = atom(
     try {
       const playersToUse = [...originalPlayers];
 
-      if (randomizePlayers) {
-        for (let i = playersToUse.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [playersToUse[i], playersToUse[j]] = [playersToUse[j], playersToUse[i]];
-        }
-        console.log('Players randomized for tournament:', playersToUse.map(p => p.name));
+      // Always randomize
+      for (let i = playersToUse.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [playersToUse[i], playersToUse[j]] = [playersToUse[j], playersToUse[i]];
       }
 
       await tournamentManager.createTournament(playersToUse, settings);
@@ -88,24 +94,55 @@ export const createTournamentAtom = atom(
 
 export const updateMatchAtom = atom(
   null,
-  async (_, set, { matchId, opponent1Score, opponent2Score }: {
+  async (get, set, { matchId, opponent1Score, opponent2Score }: {
     matchId: number;
     opponent1Score: number;
     opponent2Score: number;
   }) => {
     try {
-      console.log('updateMatchAtom: Starting match update', { matchId, opponent1Score, opponent2Score });
+      // Get participant names before update for stats tracking
+      const activeMatch = get(activeMatchAtom);
+      const currentData = await tournamentManager.getViewerData();
+      const getNameById = (id: number | null) => {
+        if (!id) return null;
+        const p = currentData.participants.find((p: any) => p.id === id);
+        return p?.name || null;
+      };
+
+      const p1Name = getNameById(activeMatch?.opponent1?.id);
+      const p2Name = getNameById(activeMatch?.opponent2?.id);
 
       const updateResult = await tournamentManager.updateMatch(matchId, opponent1Score, opponent2Score);
-      console.log('updateMatchAtom: TournamentManager.updateMatch result:', updateResult);
+      console.log('updateMatchAtom: match updated', updateResult);
 
-      console.log('updateMatchAtom: Refreshing tournament data...');
       const data = await tournamentManager.getViewerData();
+      const dataWithTimestamp = { ...data, _lastUpdated: Date.now() };
 
-      const dataWithTimestamp = {
-        ...data,
-        _lastUpdated: Date.now()
+      // Update player stats
+      const stats = { ...get(playerStatsAtom) };
+      const winnerName = opponent1Score > opponent2Score ? p1Name : p2Name;
+
+      // Helper to get individual names (handles doubles "A & B" format)
+      const getIndividualNames = (name: string | null): string[] => {
+        if (!name) return [];
+        return name.includes(' & ') ? name.split(' & ') : [name];
       };
+
+      // Credit points to all individuals
+      for (const name of getIndividualNames(p1Name)) {
+        if (!stats[name]) stats[name] = { wins: 0, totalPoints: 0 };
+        stats[name].totalPoints += opponent1Score;
+      }
+      for (const name of getIndividualNames(p2Name)) {
+        if (!stats[name]) stats[name] = { wins: 0, totalPoints: 0 };
+        stats[name].totalPoints += opponent2Score;
+      }
+      // Credit win
+      for (const name of getIndividualNames(winnerName)) {
+        if (!stats[name]) stats[name] = { wins: 0, totalPoints: 0 };
+        stats[name].wins += 1;
+      }
+      set(playerStatsAtom, stats);
 
       set(tournamentDataAtom, dataWithTimestamp);
       set(activeMatchAtom, null);
