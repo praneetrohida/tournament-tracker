@@ -522,23 +522,30 @@ export const TournamentView = () => {
                             }
                           };
 
+                          // Check if this is a BYE match (opponent is null entirely)
+                          const isByeMatch = match.opponent1 === null || match.opponent2 === null;
+
                           // Get participant names by ID
-                          const getParticipantName = (participantId: number | null) => {
-                            if (!participantId) return 'TBD';
-                            const participant = tournamentData.participants.find((p: any) => p.id === participantId);
-                            return participant?.name || `Player ${participantId}`;
+                          const getParticipantName = (opponent: any) => {
+                            if (opponent === null) return 'BYE';
+                            if (!opponent?.id) return 'TBD';
+                            const participant = tournamentData.participants.find((p: any) => p.id === opponent.id);
+                            return participant?.name || `Player ${opponent.id}`;
                           };
 
                           const status = getMatchStatus(match.status);
-                          const player1Name = getParticipantName(match.opponent1?.id);
-                          const player2Name = getParticipantName(match.opponent2?.id);
+                          const player1Name = getParticipantName(match.opponent1);
+                          const player2Name = getParticipantName(match.opponent2);
+
+                          // Skip BYE matches — they are auto-completed by the library
+                          if (isByeMatch) return null;
 
                           return (
                             <div
                               key={match.id}
                               className={`p-3 border rounded-md transition-colors ${
-                                status === 'ready' 
-                                  ? 'bg-green-50 border-green-200' 
+                                status === 'ready'
+                                  ? 'bg-green-50 border-green-200'
                                   : status === 'completed'
                                   ? 'bg-blue-50 border-blue-200'
                                   : 'bg-gray-50 border-gray-200'
