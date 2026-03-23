@@ -111,6 +111,11 @@ export const TournamentSetup = () => {
               Add at least 2 players to create a tournament
             </p>
           )}
+          {players.length >= 2 && Math.log2(players.length) % 1 !== 0 && (
+            <p className="text-sm text-muted-foreground mt-2 text-center">
+              {players.length} players: {Math.pow(2, Math.ceil(Math.log2(players.length))) - players.length} player{Math.pow(2, Math.ceil(Math.log2(players.length))) - players.length !== 1 ? 's' : ''} will receive a first-round bye
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
