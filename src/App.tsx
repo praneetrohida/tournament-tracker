@@ -34,7 +34,7 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="pt-28 pb-12 px-6 max-w-2xl mx-auto">
+      <main className="pb-12 px-6 max-w-2xl mx-auto" style={{ paddingTop: 'calc(5rem + env(safe-area-inset-top, 0px))' }}>
         {appView === 'setup' && <SetupScreen />}
         {appView === 'bracket' && <TournamentView />}
         {appView === 'scoring' && <MatchScoreEntry />}
